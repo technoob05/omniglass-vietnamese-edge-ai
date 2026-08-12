@@ -75,7 +75,7 @@
     },
     {
       "path": "scripts/patch_native_vietnamese_profile.py",
-      "sha256": "5061040b8de7f84877ca77205158fb491205e2de5b7bb79ddc79b25431b7e182"
+      "sha256": "2e7fa25d0b0c0db267fba3002bdd1bbecd1f50784a6bf6ef0a2dd69c767cdf23"
     },
     {
       "path": "scripts/patch_native_vietnamese_tts.py",
