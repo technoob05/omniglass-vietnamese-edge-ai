@@ -1,0 +1,165 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-11T18:00:00Z",
+  "profile": "omniglass-vietnamese-realtime-h100",
+  "status": "deployed_and_e2e_verified",
+  "browser_url_local_tunnel": "https://127.0.0.1:8006/vi",
+  "hardware": {
+    "primary": "NVIDIA H100 80GB HBM3 MIG 4g.40gb",
+    "reference_eval": "NVIDIA H100 80GB HBM3 MIG 2g.20gb"
+  },
+  "runtime": {
+    "gateway": "MiniCPM-o-Demo mode=chat over HTTPS/WSS",
+    "camera": "browser getUserMedia rear-camera preferred",
+    "audio_capture": "browser AudioWorklet, stateful resample to PCM16LE mono 16 kHz",
+    "audio_playback": "browser AudioContext, contiguous PCM16 chunk scheduling at 48 kHz",
+    "tts_start_policy": "sentence-buffered early TTS by default; /vi?early_tts=0 is the rollback",
+    "session_policy": "one immutable ASR final per VLM turn; five-turn rolling text history",
+    "privacy": "camera frames are captured on finalized speech only; no raw media logging by the VI profile"
+  },
+  "models": [
+    {
+      "role": "visual_reasoner",
+      "id": "openbmb/MiniCPM-o-4_5",
+      "snapshot_revision": "073dbbc8c5bc0af2d789e1ce12e7c17a6be746e1",
+      "runtime_source": "OpenBMB/MiniCPM-o-Demo",
+      "runtime_commit": "d0a002093615b7f1d4d0f87a03fc01cb39bef3f6",
+      "precision": "PyTorch mixed/half precision",
+      "license": "Apache-2.0",
+      "deployment": "H100 primary only"
+    },
+    {
+      "role": "vietnamese_asr",
+      "id": "vinai/PhoWhisper-medium",
+      "revision": "55a7e3eb6c906de891f8f06a107754427dd3be79",
+      "source_commit": "b06f1937995cfee75b9e4ad3e2ae0798faf1a562",
+      "precision": "FP16",
+      "license": "BSD-3-Clause",
+      "endpointing": "silero-vad 6.2.1; 500 ms trailing silence; 300 ms speech padding in /vi",
+      "semantics": "VAD-finalized utterance ASR, not incremental decoder streaming"
+    },
+    {
+      "role": "vietnamese_tts_primary",
+      "id": "pnnbao-ump/VieNeu-TTS-v3-Turbo",
+      "revision": "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4",
+      "source_commit": "a8c9fbf99749d5ce45c89111f71558d6ceef3424",
+      "precision": "PyTorch H100",
+      "license": "Apache-2.0",
+      "default_voice": "Trúc Ly",
+      "stream_format": "NDJSON meta/audio/done; PCM16LE mono 48 kHz"
+    },
+    {
+      "role": "vietnamese_tts_fallback",
+      "id": "facebook/mms-tts-vie",
+      "license": "CC-BY-NC-4.0",
+      "stream_format": "complete WAV base64",
+      "fallback_rule": "used only when VieNeu fails before emitting its first audio chunk"
+    }
+  ],
+  "source_artifacts": [
+    {
+      "path": "native-overrides/vi-profile/vi-chat.html",
+      "sha256": "3ef13245059350a39dd94d4564acfc3bd4b262a8bce6f00d3d1d59cdcebdd837"
+    },
+    {
+      "path": "native-overrides/vi-profile/vi-chat.js",
+      "sha256": "8ce03449aa2320f744c3439479b3395431afef4bd94f2ec589f6d0560dc49f64"
+    },
+    {
+      "path": "scripts/phowhisper_asr_service.py",
+      "sha256": "23993b52390b32c8205de0620fbc6b922ff6f789d7da65f139f83da2a901ce1e"
+    },
+    {
+      "path": "scripts/native_vieneu_tts_service.py",
+      "sha256": "ab7b6a1f8372ce2b71499051948617062e2b2e42cc141a9ad932a1d0df0b86e7"
+    },
+    {
+      "path": "scripts/patch_native_vietnamese_profile.py",
+      "sha256": "5061040b8de7f84877ca77205158fb491205e2de5b7bb79ddc79b25431b7e182"
+    },
+    {
+      "path": "scripts/patch_native_vietnamese_tts.py",
+      "sha256": "a98839ccf88094e69c8165eec72893dca429c543cc4be0f341ae2adcd5f6b964"
+    }
+  ],
+  "verified_results": {
+    "browser_e2e_3turn": {
+      "passed": true,
+      "unique_immutable_asr_finals": 3,
+      "exactly_once_chat_inputs": 3,
+      "distinct_frame_hashes": 3,
+      "vieneu_stream_http_200": 3,
+      "artifact": "results/vi_profile_e2e/report.json"
+    },
+    "protocol_soak_10turn": {
+      "passed": true,
+      "errors": 0,
+      "duplicates": 0,
+      "asr_speech_end_to_final_p95_ms": 496.1,
+      "frame_age_p95_ms": 15.3,
+      "vlm_input_to_first_text_p95_ms": 536.7,
+      "speech_end_to_first_audio_p95_ms": 4204,
+      "artifact": "artifacts/vietnamese-protocol-soak-10turn.json"
+    },
+    "browser_resilience": {
+      "passed": true,
+      "barge_in_checks": "10/10",
+      "stop_restart_checks": "11/11",
+      "tts_primary_failure_fallback_checks": "6/6",
+      "artifact": "results/vi_profile_resilience/report.json"
+    },
+    "early_tts_acceptance": {
+      "passed": true,
+      "first_request_before_response_done": true,
+      "fifo_exactly_once": true,
+      "feature_flag_off_passed": true,
+      "barge_in_and_stop_passed": true,
+      "artifact": "results/vi_early_tts/report.json"
+    },
+    "early_tts_production_soak_10turn": {
+      "passed": true,
+      "errors": 0,
+      "duplicates": 0,
+      "speech_end_to_first_decodable_audio_p50_ms": 2252.053,
+      "speech_end_to_first_decodable_audio_p95_ms": 3112.793,
+      "baseline_p95_ms": 4204.347,
+      "p95_improvement_percent": 26.0,
+      "artifact": "artifacts/vietnamese-early-tts-production-soak-10turn.json"
+    },
+    "asr_fleurs_50": {
+      "medium_normalized_wer": 0.089689,
+      "medium_normalized_cer": 0.060612,
+      "medium_inference_p95_ms": 979.3,
+      "large_normalized_wer": 0.086158,
+      "decision": "medium retained for realtime latency and memory",
+      "artifact": "artifacts/phowhisper-medium-vs-large-fleurs-vi-test50.json"
+    },
+    "tts": {
+      "vieneu_first_chunk_median_ms": 127.5,
+      "vieneu_first_chunk_p95_ms": 162.6,
+      "vieneu_rtf_median": 0.385,
+      "mms_complete_wav_median_ms": 72.8,
+      "mms_complete_wav_p95_ms": 118.3
+    },
+    "regression_suite": {
+      "passed": 71,
+      "failed": 0
+    }
+  },
+  "known_gates": {
+    "passed": [
+      "ASR endpoint-to-final P95 <= 1.0 s on synthetic protocol soak",
+      "frame age P95 <= 250 ms",
+      "MiniCPM input-to-first-text P95 <= 1.0 s",
+      "exactly-once turn routing and no duplicate frame/action"
+    ],
+    "not_yet_passed": [
+      "normalized clean-read ASR WER <= 8%",
+      "speech end to first audible response P95 <= 2.0 s",
+      "100-turn and 30-minute soak",
+      "regional-accent/noise/glasses-microphone quality set",
+      "physical QCS8550/QCS6490 deployment"
+    ]
+  },
+  "safety": "Research visual-assistance prototype only; not a certified navigation aid."
+}

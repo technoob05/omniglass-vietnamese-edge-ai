@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-11T17:37:54Z",
+  "claim_policy": {
+    "verified": "Reproduced by this workspace on the stated hardware/runtime.",
+    "upstream_verified": "Documented by the named upstream source, but not reproduced on our target board.",
+    "planned": "Design intent only; do not present as working deployment.",
+    "blocked": "Missing a required artifact, toolchain, conversion result, or physical-board measurement."
+  },
+  "baselines": [
+    {
+      "id": "sherpa-onnx-zipformer-vi-30m-int8-cpu",
+      "task": "automatic-speech-recognition",
+      "language": "vi",
+      "recommended_role": "offline edge baseline for finalized VAD utterances",
+      "overall_status": "verified_x86_64_cpu__planned_linux_arm64",
+      "upstream": {
+        "runtime_repository": "https://github.com/k2-fsa/sherpa-onnx",
+        "runtime_version": "1.13.2",
+        "runtime_tag_commit": "13d0ae6c539d2809d32f5eaa3ef1db0c459d0b24",
+        "model_repository": "https://huggingface.co/hynt/Zipformer-30M-RNNT-6000h",
+        "model_revision": "24ed30248e1c96bb690c81c24ab4e056f8cd9fce",
+        "official_model_documentation": "https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-transducer/zipformer-transducer-models.html"
+      },
+      "licenses": {
+        "runtime": {
+          "spdx": "Apache-2.0",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE"
+        },
+        "model": {
+          "spdx": "CC-BY-NC-ND-4.0",
+          "source": "https://huggingface.co/hynt/Zipformer-30M-RNNT-6000h",
+          "commercial_use_allowed": false,
+          "archive_contains_license_file": false,
+          "redistribution_note": "Use the official archive as-is for the non-commercial school demo. Do not redistribute a converted or modified checkpoint without separate permission and legal review. Preserve attribution."
+        }
+      },
+      "download": {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-vi-30M-int8-2026-02-09.tar.bz2",
+        "archive": "sherpa-onnx-zipformer-vi-30M-int8-2026-02-09.tar.bz2",
+        "archive_bytes": 26442384,
+        "sha256": "da8b637947091829d7ee9eda23da2a4ec7caa399233a3f4e34eb719fb2ea6b9b",
+        "directory": "sherpa-onnx-zipformer-vi-30M-int8-2026-02-09"
+      },
+      "artifacts": [
+        {"path": "encoder.int8.onnx", "bytes": 27699063, "sha256": "8ef5286dd427eb108055c2ddc1982aa31e544706072d5ea228729292dacade68", "precision": "int8"},
+        {"path": "decoder.onnx", "bytes": 5165084, "sha256": "cf2aa385b82c9d5d40cd29c3188af52d0249b3b78f0d4b7eb84ad502d50c7e7f", "precision": "fp32"},
+        {"path": "joiner.int8.onnx", "bytes": 1033417, "sha256": "7311d2e17b810ecea515d79c71cc4668af8759256a06fa01d27047772320c821", "precision": "int8"},
+        {"path": "tokens.txt", "bytes": 23238, "sha256": "ca8171f8bbd516c050b627582f2125c8f5f1f6ed967ab41b0fa9aae2cf61b492"},
+        {"path": "bpe.model", "bytes": 268106, "sha256": "002894e7a82d80ffa5e25008ec8c5496159db804005e2103de96b01b4c13d445"}
+      ],
+      "model": {
+        "architecture": "Zipformer RNN-Transducer",
+        "parameter_count_approx": 30000000,
+        "decoder": "greedy_search",
+        "streaming_semantics": "offline utterance decoder; microphone streaming requires an external VAD/endpointer"
+      },
+      "input": {
+        "api_tensor": {"dtype": "float32", "shape": ["samples"], "range": [-1.0, 1.0]},
+        "file_contract": {"container": "WAV", "channels": 1, "sample_width_bits": 16},
+        "internal_sample_rate_hz": 16000
+      },
+      "preprocess": {
+        "feature": "80-bin FBank",
+        "feature_dim": 80,
+        "sample_rate_hz": 16000,
+        "dither": 0.0,
+        "normalize_samples": true,
+        "snip_edges": false
+      },
+      "output": {
+        "type": "UTF-8 transcript",
+        "timestamps": false,
+        "stability": "final per utterance"
+      },
+      "runtime": {
+        "engine": "sherpa-onnx",
+        "provider": "cpu",
+        "num_threads_smoke": 1,
+        "host_runtime_pin": "sherpa-onnx==1.13.2",
+        "verified_x86_64_wheels": [
+          {
+            "filename": "sherpa_onnx-1.13.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+            "bytes": 4295947,
+            "sha256": "8be96d3d98d8ba4fedf8632b0d51f50cf876c8732fd2e8e3efc6cb26cd50ee7f"
+          },
+          {
+            "filename": "sherpa_onnx_core-1.13.2-py3-none-manylinux2014_x86_64.whl",
+            "bytes": 9804956,
+            "sha256": "544e81156c832ed24f9bf7176c4592705a86103a6d545bfa4449953c5bdb4e76"
+          }
+        ],
+        "arm64_runtime_artifact": null
+      },
+      "targets": [
+        {
+          "target": "Linux x86_64 CPU",
+          "status": "verified",
+          "evidence": "artifacts/edge-vi-sherpa-smoke-pod-b.json"
+        },
+        {
+          "target": "QCS8550 Linux ARM64 CPU",
+          "status": "planned",
+          "required_evidence": ["device runtime load", "Vietnamese golden-set WER/CER", "latency P50/P95", "peak RSS", "power and thermal soak"]
+        },
+        {
+          "target": "QCS6490 Linux ARM64 CPU",
+          "status": "planned",
+          "required_evidence": ["device runtime load", "Vietnamese golden-set WER/CER", "latency P50/P95", "peak RSS", "power and thermal soak"]
+        }
+      ],
+      "claims": [
+        {"claim": "Official int8 ONNX archive downloads and passes SHA-256 verification.", "status": "verified"},
+        {"claim": "The model decodes all three bundled Vietnamese WAV files on x86_64 CPU without CUDA.", "status": "verified", "evidence": "artifacts/edge-vi-sherpa-smoke-pod-b.json"},
+        {"claim": "sherpa-onnx documents Linux/embedded/ARM64 support and this Vietnamese model with VAD microphone examples.", "status": "upstream_verified"},
+        {"claim": "The model meets realtime and accuracy requirements on QCS8550/QCS6490 boards.", "status": "planned"},
+        {"claim": "The model runs on Qualcomm HTP/NPU.", "status": "blocked", "reason": "No Vietnamese QNN context binary or exact-board conversion has been produced; CPU is the selected baseline."}
+      ]
+    },
+    {
+      "id": "phowhisper-medium-qnn-feasibility",
+      "task": "automatic-speech-recognition",
+      "language": "vi",
+      "recommended_role": "research-only QNN conversion spike; retain H100 service until exact-board proof",
+      "overall_status": "planned_blocked",
+      "upstream": {
+        "model_repository": "https://huggingface.co/vinai/PhoWhisper-medium",
+        "model_revision": "55a7e3eb6c906de891f8f06a107754427dd3be79",
+        "architecture_family": "Whisper medium"
+      },
+      "licenses": {
+        "model": {
+          "spdx": "BSD-3-Clause",
+          "source": "https://huggingface.co/vinai/PhoWhisper-medium"
+        },
+        "qairt": {
+          "spdx": "Proprietary",
+          "source": "Qualcomm AI Runtime SDK installation terms"
+        }
+      },
+      "source_artifacts": [
+        {"path": "pytorch_model.bin", "bytes": 3055754969, "sha256": "699b8650035692ceb72db1d24c2879654e1cf9fa2d422a3bb14ac990b5141c59"},
+        {"path": "config.json", "sha256": "d2f99a745fa729268916e18bff4c3469598688ee60f9b71fceee9851c43fc7cd"},
+        {"path": "preprocessor_config.json", "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"},
+        {"path": "tokenizer.json", "sha256": "c218b12acbc2168cad951ae8a8c8d345df09dfa63b787214d4ac27762170fd7b"},
+        {"path": "vocab.json", "sha256": "8f680bba319e01a653d2e8a5dbc17a9157179e0576e6ce74ce0c06356c6e24f9"},
+        {"path": "merges.txt", "sha256": "78f27f801feb4283ae969d4cadacb28fc051b655647402b1a252c7079ea11c46"}
+      ],
+      "model": {
+        "architecture": "encoder-decoder Transformer",
+        "parameter_count": 769000000,
+        "d_model": 1024,
+        "encoder_layers": 24,
+        "decoder_layers": 24,
+        "encoder_attention_heads": 16,
+        "decoder_attention_heads": 16,
+        "autoregressive_decoder": true
+      },
+      "input": {
+        "audio": {"sample_rate_hz": 16000, "channels": 1, "max_chunk_seconds": 30},
+        "encoder_features": {"dtype_before_quantization": "float32", "shape": [1, 80, 3000]}
+      },
+      "preprocess": {
+        "feature": "log-Mel spectrogram",
+        "feature_size": 80,
+        "n_fft": 400,
+        "hop_length": 160,
+        "chunk_length_seconds": 30
+      },
+      "output": {
+        "type": "autoregressive token IDs decoded by the Whisper tokenizer",
+        "language": "vi",
+        "task": "transcribe"
+      },
+      "qnn_plan": {
+        "artifact_status": "absent",
+        "context_binary_sha256": null,
+        "required_steps": [
+          "Export and numerically validate separate fixed-shape encoder and one-token decoder-with-KV-cache ONNX graphs.",
+          "Create representative Vietnamese calibration data and select precision separately for each SoC.",
+          "Resolve unsupported/dynamic operators and compile a context binary for the exact QCS8550 or QCS6490 HTP architecture.",
+          "Keep the tokenizer, decoding loop, suppression rules and endpointing in the host application.",
+          "Compare final transcripts and WER/CER against the pinned PyTorch model before measuring latency, RSS, power and thermals."
+        ],
+        "blockers": [
+          "No QAIRT/QNN SDK inventory or licensed toolchain has been captured for the delivered boards.",
+          "No exported PhoWhisper encoder/decoder ONNX pair is frozen in this workspace.",
+          "No exact-board QNN context binary exists.",
+          "No calibration set hash or quantization accuracy report exists.",
+          "The official sherpa-onnx QNN examples currently document device-specific Zipformer-CTC/SenseVoice context binaries, not PhoWhisper-medium."
+        ]
+      },
+      "targets": [
+        {"target": "QCS8550 HTP", "status": "planned_blocked", "precision_candidates": ["FP16", "W8A16", "W8A8"]},
+        {"target": "QCS6490 HTP", "status": "planned_blocked", "precision_candidates": ["W8A8 with quantized I/O"]}
+      ],
+      "claims": [
+        {"claim": "Pinned PhoWhisper-medium runs on H100 through PyTorch.", "status": "verified", "evidence": "artifacts/phowhisper-medium-pod-b.json"},
+        {"claim": "PhoWhisper-medium runs through QNN on QCS8550.", "status": "blocked"},
+        {"claim": "PhoWhisper-medium runs through QNN on QCS6490.", "status": "blocked"}
+      ]
+    }
+  ]
+}

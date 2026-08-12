@@ -1,0 +1,51 @@
+# Third-party source trees and downloaded models are intentionally not vendored.
+upstream/
+models/
+checkpoints/
+data/
+
+# Private/runtime evidence may contain faces, voices, transcripts, or host paths.
+results/
+artifacts/
+runs/
+logs/
+sessions/
+output/
+tmp/
+.tmp/
+
+# Local credentials, certificates, and environments.
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.venv*/
+venv/
+
+# Python/tool caches.
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
+# Model and raw-media payloads.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.dlc
+*.gguf
+*.y4m
+*.wav
+*.mp4
+*.webm
+
+# Editor/OS files.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

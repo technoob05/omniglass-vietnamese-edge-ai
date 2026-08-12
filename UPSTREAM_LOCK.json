@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "policy": "References only; upstream code and weights are not vendored.",
+  "upstreams": [
+    {
+      "name": "OpenGlass",
+      "url": "https://github.com/OpenSQZ/OpenGlass",
+      "commit": "1ffe701e808cc67aa6462bc6071c61413302f17d",
+      "license_note": "No root LICENSE found in the audited checkout; reference only."
+    },
+    {
+      "name": "MiniCPM-o-Demo",
+      "url": "https://github.com/OpenBMB/MiniCPM-o-Demo",
+      "commit": "d0a002093615b7f1d4d0f87a03fc01cb39bef3f6",
+      "license_note": "Check the pinned upstream repository and model card before use."
+    },
+    {
+      "name": "PhoWhisper",
+      "url": "https://github.com/VinAIResearch/PhoWhisper",
+      "commit": "b06f1937995cfee75b9e4ad3e2ae0798faf1a562",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "VieNeu-TTS",
+      "url": "https://github.com/pnnbao97/VieNeu-TTS",
+      "commit": "a8c9fbf99749d5ce45c89111f71558d6ceef3424",
+      "license": "Apache-2.0"
+    }
+  ]
+}

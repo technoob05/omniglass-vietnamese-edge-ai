@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>OmniGlass Việt</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background:#090b10; color:#f6f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 20% 0,#1c2745 0,#090b10 42%); }
+    main { width:min(1180px,100%); margin:auto; padding:18px; display:grid; grid-template-columns:minmax(320px,1fr) minmax(320px,1fr); gap:16px; }
+    header { grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    h1 { font-size:clamp(22px,4vw,36px); margin:0; }
+    .badge { padding:8px 12px; border-radius:999px; background:#202637; color:#cbd2e5; font-weight:700; }
+    .badge.live { background:#103d2d; color:#7ef3bc; }
+    section { background:rgba(20,24,34,.92); border:1px solid #30394f; border-radius:18px; overflow:hidden; }
+    .camera { position:relative; min-height:420px; background:#050609; }
+    video { width:100%; height:100%; min-height:420px; object-fit:cover; display:block; }
+    .overlay { position:absolute; inset:auto 14px 14px; padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.7); backdrop-filter:blur(10px); }
+    .conversation { min-height:420px; max-height:70vh; overflow:auto; padding:16px; }
+    .message { margin:0 0 12px; padding:12px 14px; border-radius:14px; line-height:1.45; white-space:pre-wrap; }
+    .user { background:#223255; margin-left:12%; }
+    .assistant { background:#173b30; margin-right:8%; }
+    .system { color:#aeb7cc; border:1px dashed #3c465d; font-size:14px; }
+    footer { grid-column:1/-1; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button { border:0; border-radius:14px; padding:13px 18px; font-weight:800; cursor:pointer; background:#65e6ad; color:#07130e; }
+    button.stop { background:#fa6d77; color:#210407; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    label.voice { display:flex; gap:8px; align-items:center; color:#cbd2e5; font-weight:700; }
+    select { border:1px solid #46516c; border-radius:12px; padding:11px 12px; background:#171d2a; color:#fff; }
+    #partial { color:#ffd47a; min-height:24px; flex:1; }
+    @media(max-width:760px) { main { grid-template-columns:1fr; padding:10px; } header,footer { grid-column:1; } .camera,video { min-height:45vh; } .conversation { min-height:260px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><h1>👓 OmniGlass Việt</h1><div>Nghe bằng PhoWhisper · nhìn bằng MiniCPM-o · nói bằng VieNeu</div></div><div id="status" class="badge">Đã dừng</div></header>
+  <section class="camera"><video id="camera" autoplay muted playsinline></video><div id="caption" class="overlay">Bấm Bắt đầu và cho phép camera, micro.</div></section>
+  <section><div id="conversation" class="conversation"><div class="message system">Mỗi câu hỏi dùng đúng ảnh mới nhất. Lịch sử chỉ giữ 5 lượt gần nhất.</div></div></section>
+  <footer>
+    <button id="start">Bắt đầu hội thoại</button><button id="stop" class="stop" disabled>Dừng</button>
+    <label class="voice">Giọng
+      <select id="voice" aria-label="Giọng tiếng Việt">
+        <option value="Trúc Ly" selected>Trúc Ly · Nữ Bắc tự nhiên</option>
+        <option value="Ngọc Trân">Ngọc Trân · Nữ Trung tự nhiên</option>
+        <option value="Xuân Vĩnh">Xuân Vĩnh · Nam Nam tự nhiên</option>
+        <option value="Phạm Tuyên">Phạm Tuyên · Nam Bắc tự nhiên</option>
+      </select>
+    </label>
+    <div id="partial"></div>
+  </footer>
+</main>
+<script type="module" src="/static/vi/vi-chat.js?v=4-early-tts"></script>
+</body>
+</html>

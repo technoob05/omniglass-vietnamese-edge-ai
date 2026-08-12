@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OpenGlass-inspired H100 Browser</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#172033;background:#f7f8fb}body{margin:0}.app{max-width:1180px;margin:auto;padding:20px}
+    h1{margin:.2rem 0}.note{border-left:4px solid #16a34a;padding:.7rem 1rem;background:white}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+    .card{background:white;border:1px solid #d9deea;border-radius:12px;overflow:hidden}.label{padding:10px 14px;font-weight:650}.media{width:100%;aspect-ratio:16/9;object-fit:cover;background:#111;display:block}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}button,input{font:inherit;border-radius:10px;border:1px solid #c7cddd;padding:12px}input{flex:1;min-width:240px}button{cursor:pointer;font-weight:700}.primary{background:#f97316;color:white;border-color:#f97316}.stop{background:#ef4444;color:white;border-color:#ef4444}
+    #status,#answer,#metrics{background:white;border-radius:10px;padding:12px;margin-top:10px}#status{border-left:4px solid #22c55e}audio{width:100%;margin-top:10px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.app{padding:10px}}
+  </style>
+</head>
+<body><main class="app">
+  <h1>👓 OpenGlass-inspired · Hội thoại thị giác H100</h1>
+  <p class="note">Webcam/micro và state machine chạy local. Mỗi câu chỉ gửi một JPEG mới tới Qwen-VL + MMS-TTS trên H100.</p>
+  <div class="grid">
+    <section class="card"><div class="label">Camera local</div><video id="video" class="media" autoplay playsinline></video></section>
+    <section class="card"><div class="label">Ảnh đúng lượt vừa hỏi</div><img id="snapshot" class="media" alt="Ảnh lượt hiện tại"></section>
+  </div>
+  <div class="controls"><button id="camera" class="primary">📷 Bật camera</button><button id="listen" class="primary">🎧 Bật hội thoại</button><button id="stop" class="stop">■ Dừng</button></div>
+  <div class="controls"><input id="question" placeholder="Ví dụ: Trước mặt tôi có gì?"><button id="ask" class="primary">Hỏi</button></div>
+  <div id="status" role="status" aria-live="polite">Chưa bật camera.</div>
+  <div id="answer" aria-live="polite">Tôi sẵn sàng.</div>
+  <div id="metrics">Chưa có latency.</div>
+  <audio id="audio" controls preload="metadata"></audio>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = {mode:'IDLE',handsFree:false,recognition:null,stream:null,audio:null,controller:null,seq:0,lastText:'',lastAt:0};
+  const setStatus = text => $('status').textContent = text;
+  const setMode = (mode,text) => {state.mode=mode; setStatus(text)};
+  async function startCamera(){
+    if(state.stream) return;
+    try{state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});$('video').srcObject=state.stream;await $('video').play();setMode('LISTENING','🟢 Camera sẵn sàng.');}
+    catch(error){setMode('ERROR',`Không mở được camera: ${error.message}`)}
+  }
+  function capture(){
+    const video=$('video'); if(!video.videoWidth) throw new Error('Camera chưa sẵn sàng');
+    const scale=Math.min(1,1280/video.videoWidth), canvas=document.createElement('canvas');canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
+    canvas.getContext('2d',{alpha:false}).drawImage(video,0,0,canvas.width,canvas.height);$('snapshot').src=canvas.toDataURL('image/jpeg',.86);
+    return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Không chụp được JPEG')),'image/jpeg',.86));
+  }
+  function resume(){if(!state.handsFree||state.mode!=='LISTENING')return;setTimeout(startRecognition,350)}
+  function playAudio(base64,duration){
+    if(!base64)return Promise.resolve(); const audio=$('audio');state.audio=audio;audio.pause();audio.src=`data:audio/wav;base64,${base64}`;audio.currentTime=0;
+    return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);resolve()};audio.onended=finish;audio.onerror=finish;const timer=setTimeout(finish,Math.min(Math.max((Number(duration)||5)+2,5),20)*1000);audio.play().catch(finish)});
+  }
+  async function send(question){
+    const text=(question||'').trim(),now=Date.now();if(!text||state.mode==='THINKING'||state.mode==='SPEAKING')return;if(text.toLowerCase()===state.lastText&&now-state.lastAt<1500)return;state.lastText=text.toLowerCase();state.lastAt=now;
+    try{state.recognition?.abort();state.controller?.abort();const turnId=`turn-${Date.now()}-${++state.seq}`,blob=await capture();setMode('THINKING','⏳ Đã chụp ảnh · H100 đang phân tích…');
+      const form=new FormData();form.append('turn_id',turnId);form.append('question',text);form.append('frame',blob,'frame.jpg');state.controller=new AbortController();const started=performance.now();
+      const response=await fetch('/api/turn',{method:'POST',body:form,signal:state.controller.signal});const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);if(turnId!==`turn-${turnId.split('-').slice(1).join('-')}`&&false)return;
+      $('answer').textContent=result.answer_vi;$('metrics').textContent=`Tổng backend ${result.timings_ms.total} ms · VLM ${result.timings_ms.analyze} ms · TTS ${result.timings_ms.tts ?? 'n/a'} ms · browser ${Math.round(performance.now()-started)} ms`;
+      if(result.audio_wav_base64){setMode('SPEAKING','🔊 Đang trả lời tiếng Việt…');await playAudio(result.audio_wav_base64,result.audio_seconds)}
+    }catch(error){if(error.name!=='AbortError'){$('answer').textContent=`Lỗi: ${error.message}`;setStatus('Có lỗi; tôi sẽ nghe lại.')}}finally{state.controller=null;setMode('LISTENING','🟢 Đang nghe câu tiếp theo…');resume()}
+  }
+  function startRecognition(){
+    if(!state.handsFree||state.mode!=='LISTENING')return;const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){setStatus('Chrome SpeechRecognition không khả dụng; hãy nhập câu hỏi.');return}
+    const r=new SR();state.recognition=r;r.lang='vi-VN';r.continuous=false;r.interimResults=false;r.onstart=()=>setStatus('🟢 Đang nghe…');r.onresult=e=>{const text=e.results[e.results.length-1][0].transcript.trim();$('question').value=text;send(text)};r.onerror=e=>{if(!['aborted','no-speech'].includes(e.error))setStatus(`Lỗi micro: ${e.error}`)};r.onend=()=>{if(state.mode==='LISTENING')resume()};try{r.start()}catch(_){resume()}
+  }
+  $('camera').onclick=startCamera;$('ask').onclick=()=>send($('question').value);$('question').onkeydown=e=>{if(e.key==='Enter')send($('question').value)};
+  $('listen').onclick=async()=>{await startCamera();state.handsFree=true;setMode('LISTENING','🟢 Hội thoại đã bật.');startRecognition()};
+  $('stop').onclick=()=>{state.handsFree=false;state.controller?.abort();state.recognition?.abort();state.audio?.pause();setMode('IDLE','Đã dừng hội thoại.')};
+})();
+</script></body></html>
