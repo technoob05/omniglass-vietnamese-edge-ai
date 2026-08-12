@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T00:00:00Z",
+  "status": "planned_with_verified_baselines",
+  "baseline": {
+    "profile": "PhoWhisper-medium -> MiniCPM-o 4.5 chat -> VieNeu v3 Turbo",
+    "evidence_manifest": "manifests/vietnamese_h100_stack.json",
+    "production_soak": "10/10 turns; zero duplicate inputs/finals/errors",
+    "first_decodable_audio_p95_ms": 3112.793,
+    "asr_fleurs_50": {
+      "wer_percent": 8.9689,
+      "cer_percent": 6.0612,
+      "scope": "google/fleurs vi_vn/test, 50 read-speech utterances; evaluation only"
+    }
+  },
+  "upstream_locks": {
+    "ms_swift": {
+      "repository": "https://github.com/modelscope/ms-swift",
+      "commit": "ca937fbaf8e0c3dc4ea34358889430e36475463b",
+      "evidence": "minicpmo4_5 template; image/video/omni/audio modalities; LoRA CLI"
+    },
+    "qai_appbuilder": {
+      "repository": "https://github.com/qualcomm/qai-appbuilder",
+      "commit": "9b921746be37eca694df7f6a8b44df2a7f51e93a",
+      "evidence": "Linux QCS8550, QNN contexts, Genie VLM, Whisper and LoRA APIs"
+    },
+    "minicpmo": {
+      "model": "openbmb/MiniCPM-o-4_5",
+      "revision": "073dbbc8c5bc0af2d789e1ce12e7c17a6be746e1"
+    }
+  },
+  "experiments": [
+    {
+      "id": "E1-minicpmo-vi-thinker-lora",
+      "status": "ready_for_private_dataset_smoke",
+      "objective": "Vietnamese visual grounding, concise answers, abstention and typed tool plans",
+      "trainer": "ms-swift SFT LoRA",
+      "train": ["LLM LoRA rank 16"],
+      "freeze": ["vision encoder", "audio encoder", "aligner", "native TTS/Talker"],
+      "launcher": "scripts/run_minicpmo_vi_lora_smoke.sh",
+      "deployment_gate": "adapter inference parity and held-out quality before merge/export",
+      "not_proven": ["native Talker training", "GGUF adapter compatibility", "QCS8550 deployment"]
+    },
+    {
+      "id": "E2-phowhisper-glasses-domain",
+      "status": "blocked_on_consented_multi-accent_dataset",
+      "objective": "Improve glasses-microphone commands, names, units and code switching",
+      "base_order": ["PhoWhisper-small", "PhoWhisper-medium"],
+      "preserve_test": "google/fleurs vi_vn/test must not enter training",
+      "gates": {
+        "intent_accuracy_min_percent": 95,
+        "name_number_accuracy_min_percent": 90,
+        "spontaneous_accent_wer_max_percent": 15,
+        "endpoint_final_p95_max_ms": 1000
+      }
+    },
+    {
+      "id": "E3-qcs8550-modular-edge",
+      "status": "blocked_on_physical_board_inventory",
+      "objective": "Preserve the interaction contract using device-sized models",
+      "components": [
+        "YOLO nano INT8 on HTP",
+        "EdgeTAM QNN pieces plus CPU memory attention",
+        "Zipformer Vietnamese INT8 CPU baseline",
+        "Qwen2.5-VL-3B Genie feasibility",
+        "prerecorded critical phrases and Vietnamese CPU TTS experiment"
+      ],
+      "not_proven": [
+        "physical HSPTEK latency",
+        "Vietnamese ASR or TTS on HTP",
+        "MiniCPM-o 9B on-device",
+        "30-minute thermal stability"
+      ]
+    }
+  ],
+  "data_policy": {
+    "builder": "scripts/prepare_vietnamese_omni_dataset.py",
+    "required": [
+      "explicit training consent",
+      "license/provenance label",
+      "speaker/session grouping",
+      "NFC Vietnamese text",
+      "group and media SHA-256 leakage checks"
+    ],
+    "raw_media_public_default": false
+  }
+}

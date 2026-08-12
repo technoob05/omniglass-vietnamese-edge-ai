@@ -31,8 +31,12 @@ Native runtime and Vietnamese/Edge design notes:
 
 - [`NATIVE_OPENGLASS_BASELINE.md`](NATIVE_OPENGLASS_BASELINE.md)
 - [`VIETNAMESE_REALTIME_ARCHITECTURE.md`](VIETNAMESE_REALTIME_ARCHITECTURE.md)
+- [`VIETNAMESE_FINETUNING_PLAN.md`](VIETNAMESE_FINETUNING_PLAN.md)
+- [`MINICPMO_VI_LORA.md`](MINICPMO_VI_LORA.md)
 - [`EDGE_DEPLOYMENT.md`](EDGE_DEPLOYMENT.md)
+- [`QCS8550_DEPLOYMENT.md`](QCS8550_DEPLOYMENT.md)
 - [`manifests/vietnamese_h100_stack.json`](manifests/vietnamese_h100_stack.json)
+- [`manifests/vietnamese_adaptation_experiments.json`](manifests/vietnamese_adaptation_experiments.json)
 
 With the local SSH forward active, open `https://127.0.0.1:8006/vi`, accept the
 self-signed certificate, allow camera/microphone, then press **Bắt đầu hội

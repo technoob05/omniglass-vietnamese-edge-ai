@@ -167,10 +167,15 @@ Build the evaluation set before training:
 - clean augmentation from Common Voice Vietnamese, MUSAN noise, and OpenSLR
   room impulse responses where their licenses permit the intended use.
 
-Fine-tune only if PhoWhisper fails the measured WER/intent gates. Do not put
-MiniCPM-o audio fine-tuning on the demo critical path because the current
-full-duplex stack has no supported recipe. VieNeu voice adaptation is optional
-after latency and intelligibility pass with preset voices.
+Fine-tune PhoWhisper only if it fails the measured WER/intent gates. Current
+ms-swift now recognizes MiniCPM-o 4.5 image/video/audio data and LoRA, so an
+LLM-side Vietnamese thinker adapter is a valid isolated experiment. It is not
+evidence of a supported native Talker/full-duplex TTS recipe, nor of adapter
+compatibility with the deployed GGUF/C++ streaming runtime. Keep that adapter
+off the demo critical path until held-out quality, English-control, latency and
+runtime-parity gates pass. VieNeu voice adaptation is optional after latency
+and intelligibility pass with preset voices. See
+`VIETNAMESE_FINETUNING_PLAN.md` for the experiment and dataset contract.
 
 ## Edge AI migration
 

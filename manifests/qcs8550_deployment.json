@@ -1,0 +1,134 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T04:15:00Z",
+  "target": {
+    "product": "HSPTEK AIBOX 8550",
+    "soc_family_expected": "Qualcomm QCS8550",
+    "status": "not_physically_verified",
+    "vendor_source": "https://hsptek.com/vi/san-pham/aibox-8550/",
+    "vendor_claims_not_benchmarks": {
+      "memory": "uMCP 16GB+128GB",
+      "ai_compute": "48 TOPS INT8; 12 TFLOPS FP16",
+      "tdp_watts": 16,
+      "os_options": ["Android", "Ubuntu", "Linux"]
+    }
+  },
+  "upstream_runtime": {
+    "repository": "https://github.com/qualcomm/qai-appbuilder",
+    "commit": "9b921746be37eca694df7f6a8b44df2a7f51e93a",
+    "commit_date": "2026-08-12T10:37:42+08:00",
+    "license": "BSD-3-Clause",
+    "qcs8550_linux_support_status": "upstream_verified",
+    "qcs8550_linux_evidence": "README.md and docs/guide_en.md list QCS8550 Linux",
+    "local_clone": "upstream/qai-appbuilder",
+    "required_proprietary_dependency": "Qualcomm AI Runtime SDK (QAIRT/QNN)"
+  },
+  "claim_policy": {
+    "verified": "Reproduced by this workspace on the exact physical board, software stack and artifact hashes named in evidence.",
+    "upstream_verified": "Documented or sampled by upstream; not reproduced on the HSPTEK target.",
+    "planned": "Design intent or acceptance target only.",
+    "blocked": "A required artifact, license decision, toolchain fact or physical measurement is missing."
+  },
+  "required_inventory": [
+    {"id": "board_identity", "status": "blocked", "fields": ["manufacturer", "product", "sku", "soc_id", "hardware_revision", "pseudonymous_device_id"]},
+    {"id": "software", "status": "blocked", "fields": ["os_image", "kernel", "bsp_release", "qairt_version", "qnn_version", "qai_appbuilder_commit", "python_version"]},
+    {"id": "htp", "status": "blocked", "fields": ["dsp_arch", "skel_library_sha256", "stub_library_sha256", "firmware_version", "signed_pd_mode"]},
+    {"id": "camera", "status": "blocked", "fields": ["device", "driver", "pixel_formats", "modes", "rotation", "timestamp_source", "calibration_id"]},
+    {"id": "audio", "status": "blocked", "fields": ["capture_device", "playback_device", "sample_rates", "channel_map", "aec_path"]},
+    {"id": "resources", "status": "blocked", "fields": ["ram_bytes", "storage_bytes", "thermal_zones", "frequency_nodes", "power_measurement_method"]}
+  ],
+  "runtime_paths": [
+    {
+      "id": "qnn_context_binary",
+      "role": "fixed-shape CV, depth and ASR graphs",
+      "status": "upstream_verified__target_blocked",
+      "required": ["exact DSP architecture", "installed QAIRT version", "context binary hashes", "calibration hash", "numerical comparison", "HTP placement trace"]
+    },
+    {
+      "id": "genie_service",
+      "role": "local LLM/VLM via OpenAI-compatible API",
+      "status": "upstream_verified__target_blocked",
+      "upstream_example": "Qwen2.5-VL-3B",
+      "required": ["matching model pack", "matching QAIRT/Genie versions", "base-model license", "device memory test", "Vietnamese task evaluation", "thermal soak"]
+    },
+    {
+      "id": "cpu_fallback",
+      "role": "VAD, Vietnamese ASR, deterministic router and critical speech",
+      "status": "planned",
+      "required": ["Linux ARM64 wheels/binaries", "offline boot", "network-loss test", "latency and peak RSS"]
+    }
+  ],
+  "components": [
+    {
+      "id": "camera_qim_gstreamer",
+      "task": "capture",
+      "selected_role": "timestamped frame source and RAM-only ring buffer",
+      "status": "blocked",
+      "blocker": "Delivered board camera/BSP inventory is absent"
+    },
+    {
+      "id": "small_detector_tracker",
+      "task": "always-on perception",
+      "candidate": "small YOLO-family QNN detector plus CPU tracker",
+      "status": "planned",
+      "acceptance": ["sustained_fps >= 20", "no silent CPU fallback", "held-out mAP/recall", "30-minute thermal soak"]
+    },
+    {
+      "id": "zipformer_vi_cpu",
+      "task": "Vietnamese ASR",
+      "candidate": "sherpa-onnx Zipformer Vietnamese 30M INT8",
+      "status": "verified_x86_64_cpu__planned_linux_arm64",
+      "artifact_manifest": "manifests/edge_vi_asr_baselines.json",
+      "license_gate": "CC-BY-NC-ND-4.0; commercial use and converted redistribution blocked pending permission"
+    },
+    {
+      "id": "phowhisper_qnn",
+      "task": "Vietnamese ASR research spike",
+      "candidate": "PhoWhisper small/medium split encoder and cached decoder",
+      "status": "blocked",
+      "blocker": "No fixed-shape export, calibration set, exact-board context binary or accuracy report"
+    },
+    {
+      "id": "qwen25_vl_3b_genie",
+      "task": "local visual conversation",
+      "candidate": "Qwen2.5-VL-3B through Genie/QNN",
+      "status": "upstream_verified__target_blocked",
+      "blocker": "Upstream sample is not an HSPTEK measurement; matching licensed model pack and physical profile are absent"
+    },
+    {
+      "id": "vietnamese_tts",
+      "task": "speech output",
+      "selected_role": "prerecorded critical phrases plus CPU/H100 general TTS during migration",
+      "status": "planned",
+      "blocker": "Upstream QAI AppBuilder samples are Piper English and MeloTTS Chinese; no Vietnamese QNN artifact is proven"
+    },
+    {
+      "id": "minicpmo_full_duplex",
+      "task": "unified multimodal conversation",
+      "candidate": "MiniCPM-o 4.5 quantized edge port",
+      "status": "blocked_research_only",
+      "blocker": "No supported QCS8550 full-duplex artifact, audio talker path, memory fit or physical thermal result"
+    }
+  ],
+  "mandatory_gates": [
+    {"id": "identity", "status": "blocked", "evidence": []},
+    {"id": "offline_boot_and_integrity", "status": "blocked", "evidence": []},
+    {"id": "camera_audio_io", "status": "blocked", "evidence": []},
+    {"id": "model_accuracy", "status": "blocked", "evidence": []},
+    {"id": "latency_percentiles", "status": "blocked", "evidence": []},
+    {"id": "memory_power_thermal", "status": "blocked", "evidence": []},
+    {"id": "network_loss_fallback", "status": "blocked", "evidence": []},
+    {"id": "privacy_security", "status": "blocked", "evidence": []},
+    {"id": "hundred_turn_soak", "status": "blocked", "evidence": []}
+  ],
+  "provisional_targets_not_measurements": {
+    "detector_tracker_sustained_fps_min": 20,
+    "critical_camera_to_audio_p95_ms_max": 250,
+    "hybrid_vqa_first_text_p95_ms_max": 2500,
+    "hybrid_vqa_first_audio_p95_ms_max": 3000,
+    "turns": 100,
+    "soak_minutes": 30,
+    "return_to_listening_rate_min": 0.99,
+    "thermal_latency_regression_max": 0.10
+  }
+}

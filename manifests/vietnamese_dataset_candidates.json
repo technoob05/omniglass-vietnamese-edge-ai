@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T03:55:00Z",
+  "policy": {
+    "license_metadata_is_not_asset_clearance": true,
+    "commercial_use_requires": [
+      "explicit dataset license",
+      "underlying image/audio rights review",
+      "provenance-preserving transformation log",
+      "speaker/subject consent where applicable"
+    ],
+    "current_fleurs_vi_test_role": "evaluation_only_never_train",
+    "preferred_source": "consented glasses-domain recordings with private raw media"
+  },
+  "candidates": [
+    {
+      "id": "private-consented-glasses-vi-v1",
+      "modalities": ["image", "audio", "text"],
+      "role": ["vlm_sft", "asr_adaptation", "held_out_product_eval"],
+      "status": "preferred_pending_collection",
+      "source": {"kind": "private", "url": null, "revision": null},
+      "license": {"spdx": null, "label": "LicenseRef-Project-Consent-v1", "commercial_use_allowed": null},
+      "rights_review": {"status": "required_per_record", "raw_media_public": false},
+      "notes": "Primary product-domain source. Require explicit training consent and speaker/session/scene-disjoint splits."
+    },
+    {
+      "id": "google-fleurs-vi_vn",
+      "modalities": ["audio", "text"],
+      "role": ["asr_read_speech_eval", "pipeline_smoke"],
+      "status": "evaluation_only",
+      "source": {
+        "kind": "huggingface_dataset",
+        "url": "https://huggingface.co/datasets/google/fleurs",
+        "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+        "config": "vi_vn",
+        "viewer_valid": true
+      },
+      "license": {"spdx": "CC-BY-4.0", "metadata_source": "dataset card", "commercial_use_allowed": true},
+      "rights_review": {"status": "dataset_card_reviewed", "raw_media_public": true},
+      "split_policy": {"test": "evaluation_only_never_train"},
+      "notes": "Read speech is not representative of spontaneous glasses-microphone commands."
+    },
+    {
+      "id": "uitnlp-openvivqa",
+      "modalities": ["image", "text"],
+      "role": ["vietnamese_vqa_research"],
+      "status": "blocked_pending_asset_rights_review",
+      "source": {
+        "kind": "huggingface_dataset",
+        "url": "https://huggingface.co/datasets/uitnlp/OpenViVQA-dataset",
+        "revision": "cc85c24c863afb05b5a52f68950f9ba6b69975cf",
+        "viewer_valid": true
+      },
+      "license": {"spdx": "MIT", "metadata_source": "dataset card", "commercial_use_allowed": null},
+      "rights_review": {"status": "underlying_images_unresolved", "raw_media_public": true},
+      "notes": "MIT metadata is not treated as proof that every underlying image is cleared for product training."
+    },
+    {
+      "id": "vietbud500",
+      "modalities": ["audio", "text"],
+      "role": ["asr_research_candidate"],
+      "status": "research_noncommercial_gated",
+      "source": {
+        "kind": "huggingface_dataset",
+        "url": "https://huggingface.co/datasets/linhtran92/viet_bud500",
+        "revision": "4b30571f395781fddc3a4946fb378648f8572714",
+        "gated": "auto",
+        "viewer_valid": null
+      },
+      "license": {"spdx": "CC-BY-NC-SA-4.0", "metadata_source": "dataset card", "commercial_use_allowed": false},
+      "rights_review": {"status": "gated_terms_and_provenance_review_required", "raw_media_public": null},
+      "notes": "Do not use for a commercial product path; access currently requires accepting gated terms."
+    },
+    {
+      "id": "seacrowd-vlogqa",
+      "modalities": ["audio", "text"],
+      "role": ["spoken_qa_research_candidate"],
+      "status": "blocked_license_and_source_rights",
+      "source": {
+        "kind": "huggingface_loader_metadata",
+        "url": "https://huggingface.co/datasets/SEACrowd/vlogqa",
+        "revision": "e65974cbf6d154c4bfa88a6323ad2f623ba9f844",
+        "viewer_valid": false
+      },
+      "license": {"spdx": null, "label": "other", "commercial_use_allowed": null},
+      "rights_review": {"status": "youtube_source_and_local_acquisition_unresolved", "raw_media_public": null},
+      "notes": "Loader card says the corpus must be obtained separately; not approved for training."
+    },
+    {
+      "id": "vitextvqa",
+      "modalities": ["image", "text"],
+      "role": ["ocr_vqa_research_eval"],
+      "status": "research_only_pending_explicit_license",
+      "source": {
+        "kind": "github",
+        "url": "https://github.com/minhquan6203/ViTextVQA-Dataset",
+        "revision": "b730a1347dabcf237d927e875a1e2be6066aa20b"
+      },
+      "license": {"spdx": null, "label": "README says research purposes", "commercial_use_allowed": false},
+      "rights_review": {"status": "no_license_file_at_pinned_revision", "raw_media_public": true},
+      "notes": "Use only for research evaluation until explicit license and source-image rights are resolved."
+    },
+    {
+      "id": "viocrvqa",
+      "modalities": ["image", "text"],
+      "role": ["ocr_vqa_research_eval"],
+      "status": "blocked_unpinned_and_unlicensed",
+      "source": {
+        "kind": "github",
+        "url": "https://github.com/qhnhynmm/ViOCRVQA",
+        "revision": null
+      },
+      "license": {"spdx": null, "label": "README says research purposes", "commercial_use_allowed": false},
+      "rights_review": {"status": "no_license_file_observed_and_asset_rights_unresolved", "raw_media_public": true},
+      "notes": "Pin a reviewed revision and obtain explicit terms before importing any artifact."
+    },
+    {
+      "id": "dangindev-viet-cultural-vqa",
+      "modalities": ["image", "text"],
+      "role": ["cultural_vqa_research_candidate"],
+      "status": "blocked_pending_asset_and_provenance_review",
+      "source": {
+        "kind": "huggingface_dataset",
+        "url": "https://huggingface.co/datasets/Dangindev/viet-cultural-vqa",
+        "revision": "cc8be7959e9667e9802053bc7f50677f70ea5730",
+        "viewer_valid": false
+      },
+      "license": {"spdx": "Apache-2.0", "metadata_source": "dataset card", "commercial_use_allowed": null},
+      "rights_review": {"status": "underlying_images_and_generation_provenance_unresolved", "raw_media_public": true},
+      "notes": "Large community dataset with permissive card metadata, but no automatic Viewer inspection and no completed asset audit."
+    }
+  ]
+}

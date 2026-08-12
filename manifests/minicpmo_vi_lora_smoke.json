@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Reproducible, isolated Vietnamese MiniCPM-o 4.5 thinker-LoRA smoke test",
+  "status": "configuration_verified_not_trained",
+  "upstream": {
+    "ms_swift_repository": "https://github.com/modelscope/ms-swift.git",
+    "ms_swift_revision": "ca937fbaf8e0c3dc4ea34358889430e36475463b",
+    "model_id": "openbmb/MiniCPM-o-4_5",
+    "model_revision": "073dbbc8c5bc0af2d789e1ce12e7c17a6be746e1",
+    "model_license": "Apache-2.0",
+    "model_weight_bytes_bf16": 18743575332,
+    "required_model_dependencies": {
+      "transformers": "4.51.3",
+      "minicpmo-utils": "1.0.6"
+    }
+  },
+  "train_scope": {
+    "init_tts": false,
+    "init_audio": true,
+    "use_audio_in_video": false,
+    "tuner_type": "lora",
+    "target_modules": "all-linear",
+    "freeze_llm": false,
+    "freeze_vit": true,
+    "freeze_aligner": true,
+    "effective_trainable_scope": "LoRA adapters on the llm component only",
+    "explicitly_not_trained": [
+      "vpm vision tower",
+      "apm audio tower",
+      "resampler aligner",
+      "tts/talker and speech decoder"
+    ]
+  },
+  "smoke_profile": {
+    "max_steps": 10,
+    "max_length": 1024,
+    "max_slice_nums": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "gradient_checkpointing": true,
+    "torch_dtype": "bfloat16",
+    "attention_implementation": "sdpa",
+    "lora_rank": 8,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "learning_rate": 0.0001,
+    "optimizer": "adamw_torch",
+    "report_to": "none"
+  },
+  "hardware_guardrail": {
+    "target": "one dedicated H100 40GB-class GPU or MIG instance",
+    "minimum_free_memory_mib": 36000,
+    "estimated_peak_memory_mib": {
+      "lower": 28000,
+      "upper": 36000,
+      "measurement_status": "engineering estimate; capture max_memory_allocated during the first real smoke"
+    },
+    "refuse_if_compute_process_exists": true,
+    "h100_20gb_mig": "not supported by this smoke profile",
+    "production_service": "must remain on a different GPU/MIG instance or host"
+  },
+  "claims": {
+    "supported": [
+      "Vietnamese text response adaptation",
+      "Vietnamese visual and audio instruction following through the existing frozen encoders"
+    ],
+    "not_supported_or_not_proven": [
+      "Vietnamese end-to-end speech generation",
+      "Talker or speech-decoder LoRA",
+      "full-duplex timing or interruption behavior adaptation",
+      "direct loading of this PEFT adapter by the current native duplex backend",
+      "quality improvement before a held-out evaluation is run"
+    ]
+  }
+}
