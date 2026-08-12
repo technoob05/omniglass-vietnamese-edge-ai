@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T00:00:00Z",
+  "benchmark_contract": {
+    "dataset": "google/fleurs",
+    "dataset_revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "config": "vi_vn",
+    "split": "test",
+    "samples": 50,
+    "manifest": "artifacts/fleurs-vi_vn-test50-manifest.json",
+    "manifest_sha256": "189ce7087e5772493c9abbec9c4300ce44f8b705ba174127adfcb85a86c6c810",
+    "selection": "same frozen IDs and order for every model",
+    "normalization": "Unicode NFC, casefold, keep Unicode letters/numbers, preserve diacritics, remove spaces for CER",
+    "timing": "batch 1, one warmup, CUDA synchronized, model load and download excluded",
+    "anti_leakage": "test rows are evaluation-only and must not be used for adaptation or tuning",
+    "scope_limits": [
+      "read speech, not spontaneous glasses commands",
+      "no regional-accent metadata",
+      "all selected recordings reported male",
+      "not an edge-device or streaming benchmark"
+    ]
+  },
+  "candidates": [
+    {
+      "key": "phowhisper-medium",
+      "model_id": "vinai/PhoWhisper-medium",
+      "revision": "55a7e3eb6c906de891f8f06a107754427dd3be79",
+      "license": "BSD-3-Clause",
+      "parameters_approx": 769000000,
+      "status": "verified_h100",
+      "evidence": "artifacts/phowhisper-medium-fleurs-vi-test50.json",
+      "normalized_wer": 0.089689,
+      "normalized_cer": 0.060612,
+      "throughput_rtf": 0.053114,
+      "latency_p95_seconds": 0.9793,
+      "qcs8550": "planned_blocked; autoregressive Whisper QNN export has not been produced"
+    },
+    {
+      "key": "qwen3-asr-0.6b",
+      "model_id": "Qwen/Qwen3-ASR-0.6B",
+      "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+      "license": "Apache-2.0",
+      "parameters_approx": 600000000,
+      "repository_bytes": 1880619678,
+      "status": "verified_h100_same_manifest",
+      "supports_vietnamese": true,
+      "supports_streaming": true,
+      "why": "newest permissive compact candidate; official Qwen package has offline and vLLM streaming inference",
+      "evidence": "artifacts/qwen3-asr-0.6b-fleurs-vi-test50.json",
+      "evidence_sha256": "05d6d203ffc5f3c69862a0b6c489fb9d8e0607ccd39cf6dd3e86016eaea4f593",
+      "predictions_sha256": "edf075e513a874191fad997c6788990f192ca64341e521e39e2d0ab79f9f73ff",
+      "normalized_wer": 0.091808,
+      "normalized_cer": 0.047755,
+      "throughput_rtf": 0.054143,
+      "latency_p95_seconds": 0.9969,
+      "load_seconds": 11.8922,
+      "model_vram_delta_gib": 1.756,
+      "production_service_after_benchmark": "healthy",
+      "qcs8550": "research candidate only; no verified QNN/Genie artifact or physical-board measurement"
+    },
+    {
+      "key": "qwen3-asr-1.7b",
+      "model_id": "Qwen/Qwen3-ASR-1.7B",
+      "revision": "7278e1e70fe206f11671096ffdd38061171dd6e5",
+      "license": "Apache-2.0",
+      "parameters_approx": 1700000000,
+      "repository_bytes": 4703114308,
+      "status": "queued_if_h100_has_8gib_free",
+      "supports_vietnamese": true,
+      "supports_streaming": true,
+      "why": "quality track; upstream reports stronger multilingual aggregate results than 0.6B",
+      "qcs8550": "unlikely first edge ASR choice; verify memory, runtime support, power and thermal behavior"
+    },
+    {
+      "key": "whisper-large-v3-turbo",
+      "model_id": "openai/whisper-large-v3-turbo",
+      "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+      "license": "MIT",
+      "parameters_approx": 809000000,
+      "repository_bytes": 1622466054,
+      "status": "queued_same_manifest_h100",
+      "supports_vietnamese": true,
+      "supports_streaming": false,
+      "why": "strong multilingual control with four decoder layers; useful latency-quality comparison",
+      "qcs8550": "possible whisper.cpp/CPU-GPU reference, but no verified HTP artifact in this workspace"
+    }
+  ],
+  "decision_rule": {
+    "do_not_claim_sota": "No candidate is called SOTA from upstream tables or a 50-row smoke test.",
+    "promotion": [
+      "same-manifest WER and CER beat PhoWhisper-medium or deliver a measured latency/streaming advantage",
+      "speaker-disjoint glasses-mic evaluation passes after the read-speech smoke",
+      "endpoint-to-final P95 and peak VRAM fit the production budget",
+      "QCS8550 claims require a physical-board artifact and power/thermal soak"
+    ]
+  },
+  "sources": {
+    "qwen3_asr": "https://github.com/QwenLM/Qwen3-ASR",
+    "qwen3_asr_hf": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B-hf",
+    "whisper_turbo": "https://github.com/openai/whisper/discussions/2363",
+    "fleurs": "https://huggingface.co/datasets/google/fleurs"
+  }
+}

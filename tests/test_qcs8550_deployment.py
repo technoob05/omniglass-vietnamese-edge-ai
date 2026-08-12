@@ -49,7 +49,17 @@ def test_runtime_candidates_preserve_vietnamese_and_license_boundaries() -> None
     assert "CC-BY-NC-ND-4.0" in components["zipformer_vi_cpu"]["license_gate"]
     assert components["phowhisper_qnn"]["status"] == "blocked"
     assert "English" in components["vietnamese_tts"]["blocker"]
-    assert components["minicpmo_full_duplex"]["status"] == "blocked_research_only"
+    assert components["minicpmo_full_duplex"]["status"].endswith("target_blocked")
+    assert components["minicpmv46_q4_modular"]["status"].endswith("target_blocked")
+    assert components["qwen3_vl_4b_genie_control"]["policy"].startswith("benchmark control")
+
+
+def test_vietnamese_is_additive_and_native_english_is_preserved() -> None:
+    profiles = load_manifest()["language_profiles"]
+    assert profiles["native_english_chinese"]["route"] == "/omni"
+    assert "unchanged" in profiles["native_english_chinese"]["policy"]
+    assert profiles["additive_vietnamese"]["route"] == "/vi"
+    assert "overwrite native weights" in profiles["additive_vietnamese"]["must_not"]
 
 
 def test_preflight_is_read_only_and_keeps_all_release_gates_blocked() -> None:

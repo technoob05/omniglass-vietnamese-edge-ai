@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T05:00:00Z",
+  "decision": {
+    "h100_primary": "pnnbao-ump/VieNeu-TTS-v3-Turbo",
+    "qcs8550_candidate": "anphunl/Kokoro-Vietnamese",
+    "policy": "Keep VieNeu in production. Port and benchmark Kokoro ONNX/QNN on the physical QCS8550 before any switch."
+  },
+  "candidates": [
+    {
+      "id": "pnnbao-ump/VieNeu-TTS-v3-Turbo",
+      "revision": "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4",
+      "license": "Apache-2.0",
+      "parameter_class": "0.1B",
+      "artifact_bytes": 1680000000,
+      "streaming": "native chunk iterator",
+      "status": "production_h100_measured",
+      "edge_note": "ONNX INT8 exists but the measured x86 CPU RTF 3.27 was not realtime; QCS8550 remains unmeasured."
+    },
+    {
+      "id": "anphunl/Kokoro-Vietnamese",
+      "revision": "b5bc057fca0964e24a005f011ac5747608b62b37",
+      "source_revision": "a249afe5555aec6c435165c2f61ec0f71284812f",
+      "license": "Apache-2.0",
+      "parameter_class": "82M",
+      "artifact_bytes": 335089394,
+      "streaming": "sentence/chunk wrapper; model call is full chunk",
+      "status": "edge_candidate_not_yet_measured",
+      "edge_note": "Repository includes opset-18 ONNX export. H100 benchmark was blocked by a Hugging Face LFS CDN 403 while downloading kokoro_vi.pth; no latency is claimed."
+    },
+    {
+      "id": "nmcuong/MeloTTS-Vietnamese",
+      "revision": "aac61ff90056af282c3e018ad00d5e6156ce6fae",
+      "license": "MIT",
+      "artifact_bytes": 1193498969,
+      "streaming": "not demonstrated in model card",
+      "status": "secondary_cpu_candidate",
+      "edge_note": "Generator checkpoint is about 624 MB; repository also carries a training discriminator. Needs ONNX/QNN conversion and real-board measurement."
+    },
+    {
+      "id": "dolly-vn/Vira-TTS",
+      "revision": "e02c6c66be27a93093e6b3eeb333d6e60fb5848a",
+      "license": "Apache-2.0",
+      "artifact_bytes": 1332420894,
+      "streaming": "not demonstrated in model card",
+      "status": "server_research_only_until_provenance_review",
+      "edge_note": "Qwen2-0.5B plus codec and optional super-resolution; model card names only a custom dataset, so data provenance needs review before product use."
+    },
+    {
+      "id": "thangquang09/parler-tts-vietnamese-v1-stage2",
+      "revision": "e18042e69d11a7a464952c659f05f69d80484dc4",
+      "license": "Apache-2.0",
+      "artifact_bytes": 25215059311,
+      "streaming": "not demonstrated in model card",
+      "status": "voice_design_research",
+      "edge_note": "Repository includes multiple optimizer/checkpoint copies and is not an edge-ready package."
+    },
+    {
+      "id": "dolly-vn/viterbox",
+      "revision": "6ddcc1430e2c1c67c5cf8e5c30b2c6952e6191db",
+      "license": "CC-BY-NC-4.0",
+      "artifact_bytes": 3207891924,
+      "streaming": "not audited",
+      "status": "excluded_from_product_path",
+      "edge_note": "Non-commercial license and multi-gigabyte artifact."
+    },
+    {
+      "id": "ResembleAI/chatterbox",
+      "license": "MIT",
+      "status": "excluded_for_vietnamese",
+      "edge_note": "The official multilingual language list does not include Vietnamese; do not infer support from the multilingual label."
+    },
+    {
+      "id": "facebook/mms-tts-vie",
+      "license": "CC-BY-NC-4.0",
+      "status": "noncommercial_fallback_only",
+      "edge_note": "Fast complete-WAV fallback on H100, but its non-commercial license blocks the product path."
+    }
+  ],
+  "benchmark": {
+    "suite_sentences": 10,
+    "production_restarted": false,
+    "vieneu_h100": {
+      "successful": 10,
+      "errors": 0,
+      "first_audio_ms_median": 157.7535,
+      "first_audio_ms_p95": 183.55305,
+      "total_ms_median": 1729.8155,
+      "total_ms_p95": 2352.9928,
+      "rtf_median": 0.41555,
+      "rtf_p95": 0.48946,
+      "asr_back_exact_non_numeric_cases": "7/7",
+      "artifact": "artifacts/vietnamese-tts-vieneu-v3-10.json"
+    }
+  }
+}

@@ -13,6 +13,18 @@
       "os_options": ["Android", "Ubuntu", "Linux"]
     }
   },
+  "language_profiles": {
+    "native_english_chinese": {
+      "route": "/omni",
+      "policy": "preserve MiniCPM-o native full-duplex behavior unchanged",
+      "role": "compatibility and regression control"
+    },
+    "additive_vietnamese": {
+      "route": "/vi",
+      "policy": "reuse MiniCPM visual reasoning and add separate Vietnamese ASR/TTS",
+      "must_not": ["overwrite native weights", "disable English Talker", "share mutable session audio state"]
+    }
+  },
   "upstream_runtime": {
     "repository": "https://github.com/qualcomm/qai-appbuilder",
     "commit": "9b921746be37eca694df7f6a8b44df2a7f51e93a",
@@ -48,7 +60,7 @@
       "id": "genie_service",
       "role": "local LLM/VLM via OpenAI-compatible API",
       "status": "upstream_verified__target_blocked",
-      "upstream_example": "Qwen2.5-VL-3B",
+      "upstream_example": "Qwen3-VL-4B-Instruct reference candidate",
       "required": ["matching model pack", "matching QAIRT/Genie versions", "base-model license", "device memory test", "Vietnamese task evaluation", "thermal soak"]
     },
     {
@@ -89,11 +101,20 @@
       "blocker": "No fixed-shape export, calibration set, exact-board context binary or accuracy report"
     },
     {
-      "id": "qwen25_vl_3b_genie",
-      "task": "local visual conversation",
-      "candidate": "Qwen2.5-VL-3B through Genie/QNN",
+      "id": "minicpmv46_q4_modular",
+      "task": "primary local visual conversation",
+      "candidate": "MiniCPM-V 4.6 1.3B Q4_0 plus F16 multimodal projector",
+      "status": "official_gguf__target_blocked",
+      "artifact_sizes_bytes": {"language_q4_0": 501256896, "projector_f16": 1108746944},
+      "blocker": "No physical QCS8550 HTP operator-placement, memory, latency, thermal or Vietnamese visual benchmark yet"
+    },
+    {
+      "id": "qwen3_vl_4b_genie_control",
+      "task": "current-generation reference VLM",
+      "candidate": "Qwen3-VL-4B-Instruct through GenieX",
       "status": "upstream_verified__target_blocked",
-      "blocker": "Upstream sample is not an HSPTEK measurement; matching licensed model pack and physical profile are absent"
+      "policy": "benchmark control only; do not replace MiniCPM without same-suite evidence",
+      "blocker": "Published Qualcomm asset targets other chipsets; no HSPTEK QCS8550 physical profile"
     },
     {
       "id": "vietnamese_tts",
@@ -106,8 +127,9 @@
       "id": "minicpmo_full_duplex",
       "task": "unified multimodal conversation",
       "candidate": "MiniCPM-o 4.5 quantized edge port",
-      "status": "blocked_research_only",
-      "blocker": "No supported QCS8550 full-duplex artifact, audio talker path, memory fit or physical thermal result"
+      "status": "bounded_compatibility_lane__target_blocked",
+      "blocker": "No supported QCS8550 full-duplex artifact, audio talker path, memory fit or physical thermal result",
+      "fallback": "Keep native English on H100 while MiniCPM-V 4.6 modular edge lane serves local vision"
     }
   ],
   "mandatory_gates": [

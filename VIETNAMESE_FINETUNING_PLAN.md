@@ -119,6 +119,9 @@ QAI AppBuilder documents Linux QCS8550, QNN context/DLC execution, Genie LLM/VLM
 and dynamic LoRA support.  These facts establish a deployment route, not measured performance on
 the physical HSPTEK image.
 
+The English/Chinese MiniCPM-o profile is preserved unchanged. Vietnamese is additive: it reuses
+MiniCPM visual reasoning and adds Vietnamese ASR/TTS rather than replacing the English Talker.
+
 Recommended first board stack:
 
 | Loop | Candidate | Initial processor |
@@ -127,7 +130,8 @@ Recommended first board stack:
 | always-on detection | YOLO nano INT8 | HTP |
 | prompt tracking | EdgeTAM QNN pieces + CPU memory attention | HTP + CPU |
 | Vietnamese VAD/ASR | Zipformer VI INT8 baseline; custom PhoWhisper-small later | CPU first, HTP after validated conversion |
-| open visual QA | Qwen2.5-VL-3B through Genie/QAI AppBuilder | NPU feasibility gate |
+| open visual QA | MiniCPM-V 4.6 1.3B Q4_0 primary; MiniCPM-V 4.5 fallback; full MiniCPM-o Q4_0 compatibility lane | CPU/HTP feasibility gate; pinned Linux preset has OpenCL disabled |
+| current-generation control | Qwen3-VL-4B-Instruct | GenieX/QAI Hub reference, not default |
 | planning | deterministic router; small local Qwen only for ambiguity | CPU/NPU |
 | Vietnamese speech | prerecorded critical phrases; Piper/VieNeu CPU experiment | CPU/audio subsystem |
 | complex fallback | H100 MiniCPM-o teacher | optional network path |

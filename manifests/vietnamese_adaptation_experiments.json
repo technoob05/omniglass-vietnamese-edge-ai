@@ -62,7 +62,8 @@
         "YOLO nano INT8 on HTP",
         "EdgeTAM QNN pieces plus CPU memory attention",
         "Zipformer Vietnamese INT8 CPU baseline",
-        "Qwen2.5-VL-3B Genie feasibility",
+        "MiniCPM-V 4.6 1.3B Q4_0 modular edge vision",
+        "Qwen3-VL-4B-Instruct GenieX reference benchmark",
         "prerecorded critical phrases and Vietnamese CPU TTS experiment"
       ],
       "not_proven": [

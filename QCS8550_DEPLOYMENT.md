@@ -20,6 +20,21 @@ QNN artifact and it does not prove compatibility or latency on the HSPTEK board.
 Pinned evidence and every acceptance gate are machine-readable in
 [`manifests/qcs8550_deployment.json`](manifests/qcs8550_deployment.json).
 
+## Additive language profiles
+
+English/Chinese and Vietnamese are not competing deployments:
+
+- **`/omni` native EN/ZH:** preserve MiniCPM-o full-duplex audio/vision/Talker behavior unchanged.
+- **`/vi` additive profile:** reuse the MiniCPM visual/conversation brain, but feed an immutable
+  Vietnamese ASR final and synthesize the resulting Vietnamese text with a Vietnamese TTS.
+- Selecting Vietnamese must never overwrite, merge into, or disable the English model/runtime.
+  The UI selects a language profile; the service supervisor may share model weights when the
+  runtime supports it, but session and audio state remain isolated.
+
+For QCS8550, the same product behavior is preserved. Native English is the compatibility control;
+Vietnamese adds ASR/TTS adapters around the vision brain. Every device test runs both profiles so
+an optimization cannot silently regress English.
+
 ## Recommended product split
 
 Keep the always-on safety loop deterministic and local:
@@ -31,14 +46,19 @@ Keep the always-on safety loop deterministic and local:
    utterances first. A PhoWhisper QNN port is a separate feasibility experiment.
 4. A local tool router chooses `describe`, `detect`, `track`, `depth`, `stop` or `help`. Invalid,
    late or stale actions are rejected.
-5. Qwen2.5-VL-3B through Genie/QNN is the first local VLM candidate. Until physical profiling and
-   Vietnamese quality tests pass, use the measured H100 VLM as a hybrid fallback.
+5. MiniCPM is the primary visual-family candidate. Test MiniCPM-o 4.5 Q4_0 as the full native
+   compatibility lane, then MiniCPM-V 4.6 1.3B Q4_0 plus modular speech as the memory-efficient product
+   lane. Qwen3-VL-4B-Instruct is a current-generation reference candidate only; do not replace
+   MiniCPM unless the same Vietnamese/English visual suite proves it better on the physical box.
 6. Critical warnings use prerecorded Vietnamese phrases. General speech uses a CPU Vietnamese TTS
    candidate or the H100 VieNeu service until a licensed, accurate QNN artifact is produced.
 
-MiniCPM-o 4.5 full duplex is not the first on-device target. Its memory footprint, multimodal
-runtime support, audio talker path and thermals are not yet proven on QCS8550. Port the modular
-pipeline first, then compare a compact unified model against the same acceptance suite.
+MiniCPM-o 4.5 full duplex remains the desired compatibility target, but its memory footprint,
+multimodal runtime, Talker path and thermals are not yet proven on QCS8550. The first usable edge
+candidate is therefore MiniCPM-V 4.6 1.3B Q4_0 (501,256,896-byte language GGUF plus a
+1,108,746,944-byte projector) with separate Vietnamese ASR/TTS. This uses the newer 4.6 visual
+model rather than falling back to MiniCPM-o 2.6. The full MiniCPM-o Q4_0 bundle is still tested as a
+bounded lane, not discarded.
 
 ## Runtime paths
 

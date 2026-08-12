@@ -27,14 +27,21 @@ and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) to fetch dependencies fro
 
 The prototype is visual assistance, not a certified navigation or hazard-avoidance system.
 
+The Vietnamese profile is additive. It does not replace or fine-tune away the native English/
+Chinese MiniCPM-o profile; `/omni` remains the compatibility control while `/vi` supplies separate
+Vietnamese listening and speech layers around MiniCPM visual reasoning.
+
 Native runtime and Vietnamese/Edge design notes:
 
 - [`NATIVE_OPENGLASS_BASELINE.md`](NATIVE_OPENGLASS_BASELINE.md)
 - [`VIETNAMESE_REALTIME_ARCHITECTURE.md`](VIETNAMESE_REALTIME_ARCHITECTURE.md)
 - [`VIETNAMESE_FINETUNING_PLAN.md`](VIETNAMESE_FINETUNING_PLAN.md)
 - [`MINICPMO_VI_LORA.md`](MINICPMO_VI_LORA.md)
+- [`VIETNAMESE_ASR_BENCHMARK.md`](VIETNAMESE_ASR_BENCHMARK.md)
+- [`VIETNAMESE_TTS_EVALUATION.md`](VIETNAMESE_TTS_EVALUATION.md)
 - [`EDGE_DEPLOYMENT.md`](EDGE_DEPLOYMENT.md)
 - [`QCS8550_DEPLOYMENT.md`](QCS8550_DEPLOYMENT.md)
+- [`MINICPM_QCS8550_PORT.md`](MINICPM_QCS8550_PORT.md)
 - [`manifests/vietnamese_h100_stack.json`](manifests/vietnamese_h100_stack.json)
 - [`manifests/vietnamese_adaptation_experiments.json`](manifests/vietnamese_adaptation_experiments.json)
 

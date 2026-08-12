@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.1",
+  "target": "HSPTEK AIBOX 8550 / Qualcomm QCS8550 / 16 GB",
+  "status": "host_audited_physical_board_blocked",
+  "evidence_timestamp_utc": "2026-08-12",
+  "profile_policy": {
+    "native_english_chinese": "preserved unchanged at /omni; H100 remains the production route until the full edge lane passes",
+    "vietnamese": "additive ASR and TTS around MiniCPM visual reasoning at /vi",
+    "model_replacement": "prohibited without same-suite quality and device evidence"
+  },
+  "runtime": {
+    "repository": "https://github.com/tc-mb/llama.cpp-omni.git",
+    "branch": "master",
+    "revision": "09f5c3f1b484759f17b06fc63574f749c89c8761",
+    "snapdragon_build_evidence": "docs/backend/snapdragon/linux.md and docs/backend/snapdragon/CMakeUserPresets.json",
+    "linux_preset_backends": ["CPU ARM64", "Hexagon HTP"],
+    "linux_preset_opencl": false,
+    "physical_status": "not built or measured on HSPTEK here"
+  },
+  "lanes": [
+    {
+      "id": "A_minicpmv46_modular",
+      "priority": 1,
+      "role": "primary local vision ship candidate plus additive languages",
+      "model_repository": "openbmb/MiniCPM-V-4.6-gguf",
+      "model_revision": "78e02f066e9819a60573b78a4275df8a0c27f698",
+      "parameters": 1300428016,
+      "artifacts": [
+        {"name": "MiniCPM-V-4_6-Q4_0.gguf", "bytes": 501256896},
+        {"name": "mmproj-model-f16.gguf", "bytes": 1108746944}
+      ],
+      "bundle_bytes": 1610003840,
+      "quantization_reason": "the pinned Hexagon backend explicitly repacks Q4_0/Q8_0/MXFP4; Q4_K_M is retained only as a CPU quality reference",
+      "cpu_quality_reference": {"name": "MiniCPM-V-4_6-Q4_K_M.gguf", "bytes": 529101504},
+      "native_talker": false,
+      "expected_advantage": "current 1.3B on-device MiniCPM vision model; much larger RAM margin than 4.5",
+      "status": "official_artifacts_runtime_combination_unverified_on_target"
+    },
+    {
+      "id": "B_minicpmv45_quality_fallback",
+      "priority": 2,
+      "role": "8.2B MiniCPM vision quality fallback if 4.6 fails the held-out suite",
+      "model_repository": "openbmb/MiniCPM-V-4_5-gguf",
+      "model_revision": "cefe1580fe9402b06c4e1b8ed7343809377b8147",
+      "parameters": 8189195264,
+      "artifacts": [
+        {"name": "MiniCPM-V-4_5-Q4_0.gguf", "bytes": 4773679808},
+        {"name": "mmproj-model-f16.gguf", "bytes": 1095113184}
+      ],
+      "bundle_bytes": 5868792992,
+      "quantization_reason": "Q4_0 is the evidenced HTP weight format in the pinned backend",
+      "native_talker": false,
+      "expected_advantage": "known 4.5 visual baseline, but substantially higher memory and thermal risk",
+      "status": "official_artifacts_runtime_combination_unverified_on_target"
+    },
+    {
+      "id": "C_minicpmo45_full",
+      "priority": 3,
+      "role": "native English/Chinese full-duplex compatibility experiment",
+      "model_repository": "openbmb/MiniCPM-o-4_5-gguf",
+      "model_revision": "f706cc65f45288ef13f18d60834a9141c8e40b8f",
+      "llm_artifact": {"name": "MiniCPM-o-4_5-Q4_0.gguf", "bytes": 4773679904},
+      "bundle_bytes": 8619262592,
+      "start_context_tokens": 2048,
+      "native_talker": true,
+      "backend_caveat": "LLM HTP support does not prove vision/audio/TTS/token2wav operator coverage; generic GPU selection may choose HTP and must be checked for fallback",
+      "abort_conditions": [
+        "peak RSS leaves less than 25% RAM",
+        "thermal latency regression above 10%",
+        "native English session instability",
+        "any silent CPU fallback or unsupported HTP operation"
+      ],
+      "status": "official_artifacts_full_qcs8550_runtime_unverified"
+    },
+    {
+      "id": "D_qwen3vl4b_control",
+      "priority": 4,
+      "role": "current-generation comparison only",
+      "model_repository": "qualcomm/Qwen3-VL-4B-Instruct",
+      "model_revision": "172f1f3c5dbf43551522b8f4b2d072a1f886b88a",
+      "precision": "q4_0 or w4a16 only when a matching target artifact exists",
+      "published_target_caveat": "published assets/profiles are not HSPTEK QCS8550 measurements",
+      "selection_policy": "may replace MiniCPM only after same-suite quality, RAM, TTFT, thermal and license win",
+      "status": "upstream_artifact_target_unverified"
+    }
+  ],
+  "mandatory_cross_profile_regression": {
+    "native_english": true,
+    "vietnamese_additive": true,
+    "session_state_isolated": true,
+    "no_weight_overwrite": true
+  },
+  "provisional_targets_not_measurements": {
+    "peak_ram_fraction_max": 0.75,
+    "context_tokens_initial": 2048,
+    "context_tokens_goal": 4096,
+    "visual_question_ttft_p95_ms_max": 2500,
+    "critical_local_cue_p95_ms_max": 250,
+    "turns": 100,
+    "soak_minutes": 30,
+    "thermal_latency_regression_max": 0.1
+  }
+}
