@@ -90,6 +90,22 @@
     "session_state_isolated": true,
     "no_weight_overwrite": true
   },
+  "host_16gb_budget_smoke": {
+    "runtime": "llama.cpp-omni CPU-only x86_64",
+    "model_lane": "A_minicpmv46_modular",
+    "context_tokens": 2048,
+    "generated_tokens": 48,
+    "threads": 16,
+    "peak_rss_gib": 1.9713,
+    "gpu_vram_delta_gib": 0,
+    "wall_seconds": 33.166,
+    "budget_ram_gib": 16,
+    "peak_gate_gib": 12,
+    "memory_fit_passed": true,
+    "realtime_passed": false,
+    "language_quality_passed": false,
+    "claim_boundary": "host memory-fit smoke only; no physical QCS8550, HTP, power or thermal evidence"
+  },
   "provisional_targets_not_measurements": {
     "peak_ram_fraction_max": 0.75,
     "context_tokens_initial": 2048,

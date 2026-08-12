@@ -145,6 +145,19 @@ Bring-up order:
 5. Run full MiniCPM-o native English in isolation.
 6. Execute 100 turns and a 30-minute thermal soak before promotion.
 
+## Host-side 16 GB budget smoke
+
+A CPU-only x86 smoke was run with the pinned MiniCPM-V 4.6 Q4_0 artifacts, context 2,048, one image,
+16 threads and 48 generated tokens. The process completed with peak RSS **1.97 GiB** and zero GPU
+allocation, passing the conservative **12 GiB peak** gate that preserves 25% of a 16 GiB device.
+This establishes model/runtime memory fit only. Wall time was **33.17 s**, so CPU-only execution
+fails the realtime requirement. QCS8550 promotion still requires the physical HTP benchmark,
+operator-placement evidence, power/thermal soak and the held-out English/Vietnamese quality suite.
+
+The smoke also produced English for one Vietnamese prompt. The edge profile therefore needs the
+same Vietnamese language constraint and output-language validation used by the H100 `/vi` route;
+memory fit is not language-quality evidence.
+
 ## Primary sources
 
 - [MiniCPM-V 4.6 model](https://huggingface.co/openbmb/MiniCPM-V-4.6)

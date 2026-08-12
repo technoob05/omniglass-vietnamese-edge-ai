@@ -46,6 +46,16 @@ def test_runtime_records_executable_linux_preset_without_opencl() -> None:
     assert "not built or measured" in runtime["physical_status"]
 
 
+def test_host_16gb_smoke_distinguishes_fit_from_realtime() -> None:
+    smoke = load_manifest()["host_16gb_budget_smoke"]
+    assert smoke["budget_ram_gib"] == 16
+    assert smoke["peak_rss_gib"] < smoke["peak_gate_gib"]
+    assert smoke["memory_fit_passed"] is True
+    assert smoke["realtime_passed"] is False
+    assert smoke["language_quality_passed"] is False
+    assert "no physical QCS8550" in smoke["claim_boundary"]
+
+
 def test_build_is_revision_pinned_and_never_mutates_services() -> None:
     source = BUILD.read_text(encoding="utf-8")
     assert "09f5c3f1b484759f17b06fc63574f749c89c8761" in source
