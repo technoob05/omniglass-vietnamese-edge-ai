@@ -1,0 +1,175 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-08-12T07:00:00Z",
+  "experiment": {
+    "id": "qcs8550-english-hybrid-v1",
+    "target": "physical HSPTEK AIBOX 8550 / QCS8550 Linux",
+    "status": "physical_htp_smoke_verified__full_workflow_pending",
+    "goal": "Preserve the current native-English OpenGlass conversation while moving deterministic perception to the local HTP.",
+    "claim_boundary": "The physical Kalama board, QAIRT 2.36 and one YOLO HTP context have been verified. The complete English camera-to-speech workflow, MiniCPM on HTP, power and sustained thermal behavior remain pending."
+  },
+  "physical_board_evidence": {
+    "collected_at_utc": "2026-08-12T06:41:08Z",
+    "identity": {
+      "machine": "QCS_KALAMAP",
+      "family": "Snapdragon",
+      "soc_id": "603",
+      "revision": "2.0",
+      "os": "Ubuntu 22.04.2 LTS aarch64",
+      "kernel": "5.15.170-qki-consolidate-android13"
+    },
+    "runtime": {
+      "qnn_sdk": "2.36.0.250627101419_123260",
+      "snpe_sdk": "2.36.0.250627101419_123260",
+      "htp_architecture": "V73",
+      "platform_validator": "DSP prerequisites present; hardware supported; libraries found; Hexagon Architecture V73",
+      "fast_rpc_version": "unavailable: platform validator reports the query is not implemented"
+    },
+    "resources": {
+      "mem_total_kib": 15552844,
+      "mem_available_kib_at_inventory": 13169820,
+      "online_cpu_count": 6
+    },
+    "qnn_smoke": {
+      "model": "YOLOv5n 640x640 FP32 NHWC context",
+      "context": "yolov5n_qnn236_htp_v73.bin",
+      "backend": "libQnnHtp.so",
+      "inferences_requested": 20,
+      "inferences_completed": 20,
+      "exit_code": 0,
+      "htp_evidence": [
+        "QnnDevice_create succeeded",
+        "context created from cached binary",
+        "4 HVX threads used",
+        "QNN accelerator execute timing and per-op HTP cycles reported"
+      ],
+      "accelerator_execute_average_ms": 22.43,
+      "qnn_graph_execute_average_ms": 23.72,
+      "measurement_scope": "graph execution microbenchmark with qnn-net-run; not camera preprocessing, NMS, tracking or speech"
+    },
+    "access_note": "The debug BSP required root adbd for unsigned HTP protection-domain access. Non-root qnn-net-run failed before graph execution.",
+    "usb_note": "USB transport detached after adb root; reconnect is required before the next deployment stage."
+  },
+  "source_pins": {
+    "qai_appbuilder": {
+      "repository": "https://github.com/qualcomm/qai-appbuilder.git",
+      "revision": "9b921746be37eca694df7f6a8b44df2a7f51e93a"
+    },
+    "ai_hub_models": {
+      "repository": "https://github.com/qualcomm/ai-hub-models.git",
+      "revision": "f413a03dc8845739afce27cd3e691d6a5a7339a3"
+    },
+    "llama_cpp_omni": {
+      "repository": "https://github.com/tc-mb/llama.cpp-omni.git",
+      "revision": "09f5c3f1b484759f17b06fc63574f749c89c8761"
+    }
+  },
+  "minimum_runnable_stack": [
+    {
+      "id": "camera",
+      "placement": "CPU/ISP",
+      "implementation": "QIM or GStreamer V4L2 capture with timestamped RAM-only ring buffer",
+      "required": true
+    },
+    {
+      "id": "detector",
+      "placement": "QNN HTP",
+      "implementation": "Qualcomm AI Hub YOLOv11-Detection checkpoint YOLO11-N, 640x640, W8A16 QNN context binary",
+      "model_size_hint": "3.30 MB W8A16 upstream metadata",
+      "license_gate": "Ultralytics AGPL-3.0 or commercial license review required before distribution",
+      "required": true,
+      "status": "generic_yolo_htp_smoke_verified__selected_yolo11_export_pending"
+    },
+    {
+      "id": "tracker",
+      "placement": "CPU",
+      "implementation": "ByteTrack-style association over detector boxes; no neural graph",
+      "required": true
+    },
+    {
+      "id": "depth",
+      "placement": "QNN HTP on demand",
+      "implementation": "Qualcomm AI Hub Depth-Anything-V2 Small, 518x518, W8A16 QNN context binary",
+      "model_size_hint": "94.3 MB float upstream metadata; exact W8A16 context size must be recorded after export",
+      "required": false,
+      "status": "export_candidate_not_board_verified",
+      "safety_boundary": "Relative/coarse depth only until camera-specific metric calibration passes."
+    },
+    {
+      "id": "english_conversation",
+      "placement": "H100",
+      "implementation": "Existing MiniCPM-o 4.5 native English audio/vision/Talker workflow",
+      "required": true,
+      "status": "known_good_hybrid_fallback",
+      "freshness_policy": "Send the newest timestamped frame or ROI only; surface frame age and network state."
+    },
+    {
+      "id": "critical_speech",
+      "placement": "CPU",
+      "implementation": "Prerecorded English warning phrases",
+      "required": true,
+      "status": "offline_fallback"
+    }
+  ],
+  "optional_localization_lanes": {
+    "english_asr": {
+      "priority": 2,
+      "candidate": "QAI AppBuilder Whisper Tiny English encoder/decoder",
+      "placement": "QNN HTP with CPU autoregressive control",
+      "status": "requires QCS8550-specific export_and_accuracy_test",
+      "baseline": "Keep native MiniCPM-o English audio on H100 for the first physical experiment."
+    },
+    "local_vlm_control": {
+      "priority": 3,
+      "candidate": "BYOM VLM feasibility experiment; no current Qualcomm AI Hub Qwen-VL card lists QCS8550",
+      "status": "blocked_no_official_qcs8550_vlm",
+      "role": "Use installed GenieX Qwen3-0.6B as text-planner control only after placement profiling; keep free-form visual QA on H100."
+    }
+  },
+  "minicpm_v46_htp_assessment": {
+    "decision": "research_lane_only",
+    "why_not_baseline": [
+      "The official deliverable is a GGUF language model plus F16 multimodal projector, not a QNN context binary.",
+      "The Snapdragon Hexagon backend can expose HTP devices but does not prove that every MiniCPM-V 4.6 language and projector operator stays on HTP.",
+      "The original llama-omni-server is hard-wired to split MiniCPM-o 4.5 vision/audio/TTS modules and cannot host MiniCPM-V 4.6 through its native full-duplex API."
+    ],
+    "positive_evidence": [
+      "The 1.61 GB Q4_0 plus projector bundle fits the 16 GB memory class comfortably.",
+      "A bounded CUDA profile used about 2.50 GiB incremental GPU memory and 1.16 GiB host RSS, but CUDA is not QNN/HTP proof."
+    ],
+    "promotion_requirements": [
+      "Physical llama.cpp Hexagon build lists an HTP device.",
+      "A 224-pixel preprocessed frame produces one 64-token visual batch.",
+      "Verbose logs prove both language and projector work is placed on HTP with zero silent fallback.",
+      "English quality, P50/P95 latency, peak unified memory and 30-minute thermal behavior pass."
+    ]
+  },
+  "resource_policy": {
+    "physical_ram_gib": 16,
+    "aggregate_peak_rss_gate_gib": 12,
+    "camera_ring_seconds": 2,
+    "qnn_concurrency": 1,
+    "vlm_concurrency": 1,
+    "raw_media_persistence": "disabled_by_default"
+  },
+  "experiment_order": [
+    "read_only_preflight",
+    "camera_timestamp_and_rotation",
+    "detector_qnn_context_single_graph",
+    "cpu_tracker",
+    "hybrid_h100_english_conversation",
+    "on_demand_depth_qnn_context",
+    "optional_whisper_tiny_english_qnn",
+    "optional_qwen25vl3b_genie_control",
+    "optional_minicpmv46_hexagon_research",
+    "hundred_turn_and_thirty_minute_soak"
+  ],
+  "hard_gates": {
+    "htp_fallback_events": 0,
+    "detector_tracker_sustained_fps_min": 20,
+    "critical_camera_to_audio_p95_ms_max": 250,
+    "hybrid_vqa_first_text_p95_ms_max": 2500,
+    "aggregate_peak_rss_gib_max": 12,
+    "thermal_latency_regression_max": 0.1
+  }
+}

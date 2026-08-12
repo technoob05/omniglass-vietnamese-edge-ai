@@ -124,7 +124,13 @@ def qnn_libraries(environment: dict[str, str | None]) -> list[dict[str, Any]]:
 
 def detect_qcs8550(evidence: list[str]) -> bool:
     joined = "\n".join(evidence).lower()
-    return any(token in joined for token in ("qcs8550", "qcs-8550", "kimq 8550"))
+    # Qualcomm's Linux BSP identifies this family as QCS_KALAMAP rather than
+    # spelling out the retail QCS8550 name.  Keep the explicit names too so a
+    # generic development host cannot pass from architecture alone.
+    return any(
+        token in joined
+        for token in ("qcs8550", "qcs-8550", "kimq 8550", "qcs_kalamap", "qcs kalamap")
+    )
 
 
 def collect(manifest_path: Path) -> dict[str, Any]:

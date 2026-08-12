@@ -75,6 +75,7 @@ def test_detection_requires_explicit_qcs8550_identity() -> None:
     module = load_script()
     assert module.detect_qcs8550(["Qualcomm QCS8550", "Linux aarch64"])
     assert module.detect_qcs8550(["KIMQ 8550 board"])
+    assert module.detect_qcs8550(["QCS_KALAMAP", "Snapdragon", "soc_id 603"])
     assert not module.detect_qcs8550(["AMD64 development host", "Windows"])
 
 
