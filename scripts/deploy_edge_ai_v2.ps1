@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $config = Join-Path $root "versions\edge-ai-v2\device\config\qwen35-production.json"
-$runtimeFiles = @("config.py", "intents.py", "keyframes.py", "orchestrator.py", "server.py", "vlm.py")
+$runtimeFiles = @("answers.py", "config.py", "intents.py", "keyframes.py", "orchestrator.py", "server.py", "tts.py", "vlm.py")
 $runtimeRoot = Join-Path $root "versions\edge-ai-v2\device\aibox_eye"
 $remoteRoot = "/data/local/tmp/aibox-eye"
 $remoteConfig = "$remoteRoot/config/production.json"

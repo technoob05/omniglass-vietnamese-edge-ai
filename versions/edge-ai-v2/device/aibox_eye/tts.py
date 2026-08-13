@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Iterator
@@ -48,6 +49,7 @@ class VieneuTtsBackend:
         self.config = config
         self.storage_root = storage_root
         self._engine: Any | None = None
+        self._engine_lock = threading.Lock()
         self._load_error = "not loaded"
 
     def health(self) -> dict[str, Any]:
@@ -104,8 +106,12 @@ class VieneuTtsBackend:
             stem = f"tts-{time.monotonic_ns()}-{index}"
             source = output_dir / f"{stem}-source.wav"
             output = output_dir / f"{stem}.wav"
-            audio = engine.infer(normalize_vi_text(phrase), voice=self.config["voice"])
-            engine.save(audio, str(source))
+            # Streaming VLM may finish while its first phrase is already being
+            # synthesised. VieNeu's ONNX session is shared and must remain
+            # serial even though playback itself is asynchronous.
+            with self._engine_lock:
+                audio = engine.infer(normalize_vi_text(phrase), voice=self.config["voice"])
+                engine.save(audio, str(source))
             self._tempo(source, output)
             yield output
 

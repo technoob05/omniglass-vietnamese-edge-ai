@@ -80,10 +80,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 48,
         "temperature": 0.1,
         "max_frame_age_ms": 1000.0,
-        "admission_wait_seconds": 90.0,
+        "admission_wait_seconds": 20.0,
         "admission_poll_seconds": 2.0,
-        "max_image_width": 768,
-        "jpeg_quality": 88,
+        "max_image_width": 512,
+        "jpeg_quality": 82,
+        "stream": True,
+        "early_tts_min_words": 9,
+        "history_turns": 2,
     },
     "resource_guard": {
         # Interactive VLM work is best-effort. It is rejected before it can
@@ -141,6 +144,10 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("vlm.max_image_width must be in 320..1920")
     if not 40 <= int(vlm["jpeg_quality"]) <= 100:
         raise ValueError("vlm.jpeg_quality must be in 40..100")
+    if not 4 <= int(vlm["early_tts_min_words"]) <= 20:
+        raise ValueError("vlm.early_tts_min_words must be in 4..20")
+    if not 0 <= int(vlm["history_turns"]) <= 4:
+        raise ValueError("vlm.history_turns must be in 0..4")
     resource_guard = config["resource_guard"]
     if float(resource_guard["min_detector_fps_for_vlm"]) <= 0:
         raise ValueError("resource_guard.min_detector_fps_for_vlm must be positive")

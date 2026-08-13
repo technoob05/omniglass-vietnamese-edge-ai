@@ -21,6 +21,29 @@ The deterministic detector/risk lane remains independent of the VLM. VLM
 requests are single-flight and admitted only when the frame is fresh, detector
 FPS is healthy, and NPU temperature is below the configured guardrail.
 
+The deployed coordinator uses two concurrent lanes:
+
+```text
+/dev/video2 -> QNN YOLO + depth -> tracked SceneSnapshot -> risk/audio alerts
+                         |                    |
+                         |                    +-> compact deduplicated context
+                         +-> latest raw JPEG -------> Qwen3.5 2B VL (on demand)
+Whisper final transcript --------------------------> short conversation history
+                                                     |
+                                                     +-> streamed text -> VieNeu -> ALSA
+```
+
+Qwen receives a 512 px JPEG plus at most eight stable, deduplicated detections
+with label, confidence, zone, and normalized bounding box. Uncalibrated depth
+values are never exposed as metres. The last two text turns are retained only
+to resolve follow-up wording; old visual facts are never reused.
+
+On the connected QCS8550 box, the validated warm turn reached first VLM text
+in 4.12 s and completed VLM decoding in 8.31 s while QNN perception remained at
+23.7 FPS. Total request time was 12.88 s including a 4.1 s thermal admission
+wait. Cold model loading remains substantially slower, so this profile is
+interactive/on-demand rather than a per-frame VLM.
+
 The `device/` tree contains only source/config/scripts pulled from the box;
 model weights, recordings, generated audio, logs, virtual environments, and
 credentials are intentionally excluded.

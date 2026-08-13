@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .answers import answer, scene_facts
+from .answers import answer, detection_summary, scene_facts
 from .audio import AudioManager
 from .intents import route
 from .keyframes import accepts_for_vlm, prepare_for_vlm
@@ -51,6 +51,9 @@ class EyeOrchestrator:
         self._mode = SystemMode.BOOTING
         self._events: collections.deque[HazardEvent] = collections.deque(
             maxlen=int(config["storage"]["max_event_history"])
+        )
+        self._conversation: collections.deque[tuple[str, str]] = collections.deque(
+            maxlen=int(config["vlm"].get("history_turns", 2))
         )
         self._stats: dict[str, int] = {
             "polls": 0,
@@ -254,6 +257,7 @@ class EyeOrchestrator:
         intent = route(question_vi)
         if not intent.requires_vlm:
             response = answer(intent, scene)
+            self._remember(question_vi, response)
             self._speak_async(response, "deterministic_answer")
             self._restore_mode()
             return {"intent": intent.name, "answer_vi": response, "source": "scene", "queued_tts": True}
@@ -290,12 +294,12 @@ class EyeOrchestrator:
                 if admitted:
                     break
                 if waited_seconds >= wait_limit:
-                    response = "Mô-đun mô tả ảnh vẫn đang chờ HTP hạ nhiệt; nhận biết vật cản tiếp tục hoạt động."
+                    response = "Qwen đang làm mát. " + detection_summary(scene)
                     self._speak_async(response, "vlm_resource_guard")
                     return {
                         "intent": intent_name,
                         "answer_vi": response,
-                        "source": "fallback",
+                        "source": "scene_fallback",
                         "queued_tts": True,
                         "resource_guard": reasons,
                         "thermal_wait_ms": round(waited_seconds * 1000.0, 1),
@@ -326,15 +330,30 @@ class EyeOrchestrator:
             with self._lock:
                 self._stats["vlm_requests"] += 1
                 self._set_mode_locked(SystemMode.THINKING)
-            result = self.vlm.ask(question_vi, scene, jpeg)
+                history = list(self._conversation)
+            early_spoken: list[str] = []
+
+            def on_partial(text: str, _elapsed_ms: float) -> None:
+                if early_spoken:
+                    return
+                prefix = _speakable_prefix(text, int(self.config["vlm"]["early_tts_min_words"]))
+                if prefix:
+                    early_spoken.append(prefix)
+                    self._speak_async(prefix, "vlm_stream_first_phrase")
+
+            result = self.vlm.ask(question_vi, scene, jpeg, history=history, on_partial=on_partial)
             response = result.answer_vi
-            if result.uncertain:
-                response = "Mình không chắc. " + response
-            self._speak_async(response, "vlm_answer")
+            spoken_prefix = early_spoken[0] if early_spoken else ""
+            remainder = response[len(spoken_prefix):].strip(" ,;:-") if response.startswith(spoken_prefix) else response
+            if remainder:
+                self._speak_async(remainder, "vlm_answer_remainder" if spoken_prefix else "vlm_answer")
+            self._remember(question_vi, response)
             return {
                 "intent": intent_name, "answer_vi": response, "source": "vlm", "queued_tts": True,
                 "confidence": result.confidence, "uncertain": result.uncertain,
                 "evidence": result.evidence, "latency_ms": round(result.latency_ms, 1),
+                "first_token_ms": None if result.first_token_ms is None else round(result.first_token_ms, 1),
+                "early_tts_text": spoken_prefix,
                 "thermal_wait_ms": round((time.monotonic() - wait_started) * 1000.0 - result.latency_ms, 1),
                 "vlm_input": frame_input,
                 "scene_facts": scene_facts(scene),
@@ -406,8 +425,13 @@ class EyeOrchestrator:
             self.risk = RiskEngine(self.config["risk"])
             self._scene = None
             self._events.clear()
+            self._conversation.clear()
             self._set_mode_locked(SystemMode.SELF_TEST)
         return {"ok": True, "detail": "tracking, risk cooldowns, and event history reset"}
+
+    def _remember(self, question_vi: str, response_vi: str) -> None:
+        with self._lock:
+            self._conversation.append((question_vi[:240], response_vi[:320]))
 
     def _restore_mode(self) -> None:
         with self._lock:
@@ -433,3 +457,16 @@ def _rate(health: dict[str, Any], key: str) -> float | None:
         return value if value >= 0 else None
     except (AttributeError, TypeError, ValueError):
         return None
+
+
+def _speakable_prefix(text: str, minimum_words: int) -> str:
+    normalized = " ".join(text.strip().split())
+    words = normalized.split()
+    if len(words) < minimum_words:
+        return ""
+    # Prefer a natural boundary if one has already arrived; otherwise cap the
+    # first phrase so VieNeu can start while Qwen continues decoding.
+    for index, word in enumerate(words[:12], start=1):
+        if index >= minimum_words and word.endswith((".", "!", "?", ";", ":", ",")):
+            return " ".join(words[:index])
+    return " ".join(words[:minimum_words])
