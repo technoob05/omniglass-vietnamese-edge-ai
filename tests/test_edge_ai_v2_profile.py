@@ -53,7 +53,7 @@ def test_vlm_frame_is_resized_for_edge_inference() -> None:
 
 def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
-    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "loa ALSA", "Qwen3.5 2B VL"):
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "speechSynthesis", "pcSpeaker", "loa ALSA", "Qwen3.5 2B VL"):
         assert marker in text
 
 

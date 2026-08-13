@@ -51,6 +51,13 @@ speaker verification. On the connected box, a persisted cache hit reached the
 ALSA queue in 139 ms; a new dynamic sentence reached it in 3.77 s before being
 cached for later turns.
 
+For development from a PC, the web UI enables **loa máy tính** by default. It
+passes the same `answer_vi` to the browser's Vietnamese Web Speech voice and
+therefore does not depend on the box's USB ALSA speaker being audible. Use the
+**Test loa máy tính** button once after opening the page if the browser requires
+a user gesture before speech playback. VieNeu on the box remains available as
+the deterministic offline fallback.
+
 On the connected QCS8550 box, the validated warm turn reached first VLM text
 in 4.12 s and completed VLM decoding in 8.31 s while QNN perception remained at
 23.7 FPS. Total request time was 12.88 s including a 4.1 s thermal admission
