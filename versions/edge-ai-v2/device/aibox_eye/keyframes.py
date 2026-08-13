@@ -34,3 +34,34 @@ def score_jpeg(data: bytes) -> KeyframeScore:
 def accepts_for_vlm(data: bytes, minimum_sharpness: float = 12.0, maximum_clipped_fraction: float = 0.75) -> tuple[bool, KeyframeScore]:
     metrics = score_jpeg(data)
     return metrics.sharpness >= minimum_sharpness and metrics.clipped_fraction <= maximum_clipped_fraction, metrics
+
+
+def prepare_for_vlm(data: bytes, max_width: int = 768, jpeg_quality: int = 88) -> tuple[bytes, dict[str, int]]:
+    """Resize a raw camera frame once before base64/API encoding.
+
+    768 px preserves substantially more text detail than a thumbnail while
+    avoiding the visual-token and transfer cost of the 1280 px camera frame.
+    """
+    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("JPEG cannot be decoded")
+    source_height, source_width = image.shape[:2]
+    if source_width > max_width:
+        scale = max_width / float(source_width)
+        image = cv2.resize(
+            image,
+            (max_width, max(1, int(round(source_height * scale)))),
+            interpolation=cv2.INTER_AREA,
+        )
+    output_height, output_width = image.shape[:2]
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+    if not ok:
+        raise ValueError("JPEG cannot be encoded")
+    payload = encoded.tobytes()
+    return payload, {
+        "source_width": source_width,
+        "source_height": source_height,
+        "width": output_width,
+        "height": output_height,
+        "jpeg_bytes": len(payload),
+    }

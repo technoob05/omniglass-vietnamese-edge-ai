@@ -23,6 +23,11 @@ def normalize(text: str) -> str:
 def route(text: str) -> Intent:
     value = normalize(text)
     object_label = next((label for word, label in _OBJECT_WORDS.items() if word in value), None)
+    # Explicit visual requests win even when the user naturally says
+    # "ảnh camera". Previously the word camera incorrectly converted an OCR
+    # or description request into a deterministic system-status answer.
+    if any(phrase in value for phrase in ("đọc chữ", "chữ gì", "đọc biển", "màu gì", "mô tả", "đây là gì", "đang làm gì", "trên bàn")):
+        return Intent("vlm", True, object_label)
     if any(phrase in value for phrase in ("hệ thống", "camera", "có nhìn", "trạng thái")):
         return Intent("system_status", False)
     if any(phrase in value for phrase in ("bao nhiêu", "mấy người", "số người")):
@@ -37,6 +42,4 @@ def route(text: str) -> Intent:
     # It is answerable from the current scene and must not wake the VLM.
     if ("phía trước" in value or "trước mặt" in value) and ("có" in value or object_label is not None):
         return Intent("front", False, object_label)
-    if any(phrase in value for phrase in ("đọc chữ", "đọc biển", "màu gì", "mô tả", "đây là gì", "đang làm gì", "trên bàn")):
-        return Intent("vlm", True, object_label)
     return Intent("vlm", True, object_label)

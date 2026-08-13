@@ -13,10 +13,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .answers import answer
+from .answers import answer, scene_facts
 from .audio import AudioManager
 from .intents import route
-from .keyframes import accepts_for_vlm
+from .keyframes import accepts_for_vlm, prepare_for_vlm
 from .models import AlertPriority, HazardEvent, SceneSnapshot, SystemMode
 from .perception import QnnPerceptionAdapter
 from .risk import RiskEngine
@@ -265,32 +265,50 @@ class EyeOrchestrator:
             self._speak_async(response, "vlm_unavailable")
             self._restore_mode()
             return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True}
-        with self._lock:
-            perception_health = dict(self._latest_perception_health)
-            resource_snapshot = self._resource_snapshot
-        admitted, reasons = self.resource_guard.vlm_admission(_rate(perception_health, "detector_fps"), resource_snapshot)
-        if not admitted:
-            response = "Mô-đun mô tả ảnh đang tạm dừng để giữ ưu tiên cho nhận biết vật cản."
-            self._speak_async(response, "vlm_resource_guard")
-            self._restore_mode()
-            return {
-                "intent": intent_name,
-                "answer_vi": response,
-                "source": "fallback",
-                "queued_tts": True,
-                "resource_guard": reasons,
-            }
         if not self._vlm_lock.acquire(blocking=False):
             response = "Mình đang xử lý một câu hỏi theo ảnh khác. Bạn hãy chờ câu trả lời đó xong."
             self._speak_async(response, "vlm_busy")
             self._restore_mode()
             return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True}
-        if not scene.camera_ok or scene.frame_age_ms > float(self.config["vlm"]["max_frame_age_ms"]):
-            response = "Khung hình hiện không đủ mới để mô tả an toàn."
-            self._vlm_lock.release()
-            self._restore_mode()
-            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": False}
+        wait_started = time.monotonic()
+        wait_limit = float(self.config["vlm"]["admission_wait_seconds"])
+        poll_seconds = float(self.config["vlm"]["admission_poll_seconds"])
         try:
+            # Optional VLM work waits for a safe slot instead of immediately
+            # failing a user's turn. The independent perception thread keeps
+            # polling QNN YOLO/depth throughout this wait.
+            while True:
+                with self._lock:
+                    scene = self._scene or scene
+                    perception_health = dict(self._latest_perception_health)
+                    resource_snapshot = self._resource_snapshot
+                    self._set_mode_locked(SystemMode.THINKING)
+                admitted, reasons = self.resource_guard.vlm_admission(
+                    _rate(perception_health, "detector_fps"), resource_snapshot
+                )
+                waited_seconds = time.monotonic() - wait_started
+                if admitted:
+                    break
+                if waited_seconds >= wait_limit:
+                    response = "Mô-đun mô tả ảnh vẫn đang chờ HTP hạ nhiệt; nhận biết vật cản tiếp tục hoạt động."
+                    self._speak_async(response, "vlm_resource_guard")
+                    return {
+                        "intent": intent_name,
+                        "answer_vi": response,
+                        "source": "fallback",
+                        "queued_tts": True,
+                        "resource_guard": reasons,
+                        "thermal_wait_ms": round(waited_seconds * 1000.0, 1),
+                        "scene_facts": scene_facts(scene),
+                    }
+                self._stop.wait(min(poll_seconds, max(0.0, wait_limit - waited_seconds)))
+
+            if not scene.camera_ok or scene.frame_age_ms > float(self.config["vlm"]["max_frame_age_ms"]):
+                response = "Khung hình hiện không đủ mới để mô tả an toàn."
+                return {
+                    "intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": False,
+                    "thermal_wait_ms": round((time.monotonic() - wait_started) * 1000.0, 1),
+                }
             jpeg = self.perception.latest_raw_jpeg()
             accepted, score = accepts_for_vlm(jpeg)
             if not accepted:
@@ -300,6 +318,11 @@ class EyeOrchestrator:
                     "intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True,
                     "keyframe": {"sharpness": round(score.sharpness, 2), "score": round(score.score, 3)},
                 }
+            jpeg, frame_input = prepare_for_vlm(
+                jpeg,
+                max_width=int(self.config["vlm"]["max_image_width"]),
+                jpeg_quality=int(self.config["vlm"]["jpeg_quality"]),
+            )
             with self._lock:
                 self._stats["vlm_requests"] += 1
                 self._set_mode_locked(SystemMode.THINKING)
@@ -312,6 +335,9 @@ class EyeOrchestrator:
                 "intent": intent_name, "answer_vi": response, "source": "vlm", "queued_tts": True,
                 "confidence": result.confidence, "uncertain": result.uncertain,
                 "evidence": result.evidence, "latency_ms": round(result.latency_ms, 1),
+                "thermal_wait_ms": round((time.monotonic() - wait_started) * 1000.0 - result.latency_ms, 1),
+                "vlm_input": frame_input,
+                "scene_facts": scene_facts(scene),
             }
         except Exception as error:
             with self._lock:

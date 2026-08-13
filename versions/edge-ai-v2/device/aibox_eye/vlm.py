@@ -14,13 +14,12 @@ from .answers import scene_facts
 from .models import SceneSnapshot
 
 
-SYSTEM_PROMPT = """Bạn là mô-đun mô tả cảnh cho một hệ thống hỗ trợ thị giác.
-Bạn không phải cảm biến an toàn và không được khẳng định đường đi an toàn.
-Chỉ mô tả điều thực sự quan sát được trong ảnh. Khoảng cách chỉ được lấy từ
-scene_facts; không được tự ước lượng. Nếu ảnh mờ, tối, bị che, hoặc không chắc,
-hãy nói rõ là không chắc. Trả lời tiếng Việt ngắn, tối đa 25 từ.
-Chỉ xuất JSON hợp lệ với các khóa answer_vi, confidence, uncertain, evidence.
-confidence là số từ 0 đến 1; evidence là mảng chuỗi ngắn."""
+SYSTEM_PROMPT = """Bạn là đôi mắt hội thoại tiếng Việt cho người khiếm thị.
+Ảnh camera là nguồn để đọc chữ và mô tả cảnh. scene_facts là kết quả YOLO/depth
+đã chạy trước trên Qualcomm HTP và là nguồn khoảng cách duy nhất. Dùng cả hai
+nguồn, nhưng không bịa vật, chữ hoặc khoảng cách. Không khẳng định đường đi an
+toàn; nếu không nhìn rõ thì nói không chắc. Trả lời trực tiếp bằng một câu tiếng
+Việt tự nhiên, tối đa 30 từ; không JSON, không Markdown, không giải thích quy trình."""
 
 
 @dataclass(frozen=True)
@@ -43,14 +42,15 @@ class LlamaVlmClient:
     def ask(self, question_vi: str, scene: SceneSnapshot, jpeg: bytes) -> VlmAnswer:
         encoded = base64.b64encode(jpeg).decode("ascii")
         user_prompt = (
-            f"Câu hỏi của người dùng: {question_vi}\n"
-            f"scene_facts (nguồn khoảng cách duy nhất): {json.dumps(scene_facts(scene), ensure_ascii=False)}"
+            f"Câu hỏi: {question_vi}\n"
+            "Dữ liệu detector/depth đã đồng bộ với ảnh (zone: left/center/right; "
+            "distance_m=null nghĩa là depth chưa hiệu chuẩn):\n"
+            f"{json.dumps(scene_facts(scene), ensure_ascii=False, separators=(',', ':'))}"
         )
         body = {
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": [
