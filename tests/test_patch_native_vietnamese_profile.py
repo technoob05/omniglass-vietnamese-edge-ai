@@ -77,6 +77,24 @@ def test_browser_profile_contract_and_javascript_syntax() -> None:
     assert "run !== this.runEpoch || turn !== this.turnEpoch" in source
     assert "this.turnEpoch += 1;" in source
     assert "bargeIn()" in source
+    assert "VI_ACOUSTIC_BARGE_IN_ENABLED" in source
+    assert "get('barge_in') === '1'" in source
+    assert "BARGE_USER_RMS = 0.05" in source
+    assert "BARGE_HOLD_MS = 700" in source
+    assert "micGuardUntilMs" in source
+    assert "vad_threshold=0.45&min_silence_ms=650&speech_pad_ms=500" in source
+    assert "normalizeAssistiveTranscript" in source
+    assert "ASR hiệu chỉnh theo từ vựng trợ lý" in source
+    assert "frame cuối là hiện tại" in source
+    assert "never declare that it is safe to cross" in source
+    assert "conversationOwnsAudio" in source
+    assert "acquireConversationAudio()" in source
+    assert "releaseConversationAudio(run)" in source
+    assert "this.visualFrames.slice(-3)" in source
+    assert "/api/perception/vi/query" not in source
+    assert "language=${language}" in source
+    assert "SYSTEM_PROMPTS" in source
+    assert "speakEnglish" in source
     assert "resetCaptureBuffer()" in source
     assert "if (this.ttsAbort === controller) this.ttsAbort = null" in source
     assert "response.body.getReader()" in source
@@ -95,6 +113,20 @@ def test_browser_profile_contract_and_javascript_syntax() -> None:
     assert "speech.run === this.runEpoch && speech.turn === this.turnEpoch" in source
     assert "this.queueEarlySpeech(speech, '', true)" in source
     assert "await this.speakText(segment" in source
+    assert "source.playbackRate.value=TTS_PLAYBACK_RATE" in source
+    assert "audio.playbackRate=TTS_PLAYBACK_RATE" in source
+    assert "playSafetyAlert" in source
+    assert "this.safetySpeaking" in source
+    assert "interruptSafetyForUserSpeech()" in source
+    assert "if (!this.conversationOwnsAudio)" in source
+    assert "WORKFLOW_PROMPTS" in source
+    assert "classifyWorkflow" in source
+    assert "this.systemPrompt(transcript)" in source
+    assert "handleWatchTransition" in source
+    assert "playEnglishSafetyAlert" in source
+    assert "beginPushToTalk()" in source
+    assert "endPushToTalk()" in source
+    assert "Hold-to-talk interrupted audio output" in source
 
 
 def test_sentence_buffer_consumes_incremental_deltas_once(tmp_path: Path) -> None:
@@ -127,12 +159,42 @@ assert.deepEqual(decimal.push('   ', true), []);
     assert checked.returncode == 0, checked.stderr
 
 
+def test_openglass_workflow_router_is_bilingual(tmp_path: Path) -> None:
+    source = (ASSETS / "vi-chat.js").read_text(encoding="utf-8")
+    start = source.index("function classifyWorkflow")
+    end = source.index("function normalizeAssistiveTranscript", start)
+    harness = source[start:end] + r'''
+const assert = require('node:assert/strict');
+assert.equal(classifyWorkflow('Where is my bottle?'), 'find_object');
+assert.equal(classifyWorkflow('Tìm giúp tôi cái ví'), 'find_object');
+assert.equal(classifyWorkflow('Read this sign for me'), 'read_text');
+assert.equal(classifyWorkflow('Đọc chữ trên hộp'), 'read_text');
+assert.equal(classifyWorkflow('Which corridor should I take?'), 'indoor_direction');
+assert.equal(classifyWorkflow('Chỉ tôi lối đi tới cửa'), 'indoor_direction');
+assert.equal(classifyWorkflow('Describe what is around me'), 'describe_scene');
+assert.equal(classifyWorkflow('Mô tả cảnh trước mặt'), 'describe_scene');
+assert.equal(classifyWorkflow('Listen for the doorbell'), 'sound_watch');
+assert.equal(classifyWorkflow('Mấy ngón tay?'), 'visual_qa');
+'''
+    javascript = tmp_path / "workflow-router-test.js"
+    javascript.write_text(harness, encoding="utf-8")
+    checked = subprocess.run(
+        ["node", str(javascript)], check=False, capture_output=True, text=True
+    )
+    assert checked.returncode == 0, checked.stderr
+
+
 def test_profile_is_separate_from_native_omni_assets() -> None:
     html = (ASSETS / "vi-chat.html").read_text(encoding="utf-8")
     source = (ASSETS / "vi-chat.js").read_text(encoding="utf-8")
-    assert '/static/vi/vi-chat.js?v=4-early-tts' in html
+    assert '/static/vi/vi-chat.js?v=8-echo-safe-ptt' in html
+    assert 'id="workflow"' in html
+    assert 'id="pushToTalk"' in html
+    assert "Object memory / last seen" in html
+    assert "/api/perception/vi/frame" in source
+    assert "perceptionContext()" in source
     assert 'value="Trúc Ly" selected' in html
     assert 'value="Ngọc Trân"' in html
     assert "voice:el.voice?.value || 'Trúc Ly'" in source
-    assert "OmniGlass Việt" in html
+    assert "OpenGlass-compatible runtime" in html
     assert "omni-app.js" not in html

@@ -28,7 +28,7 @@ def test_vietnamese_profile_uses_only_pinned_tool_roles() -> None:
         (ROOT / "manifests/vietnamese_h100_stack.json").read_text(encoding="utf-8")
     )
     roles = {model["role"]: model for model in manifest["models"]}
-    assert roles["vietnamese_asr"]["id"] == "vinai/PhoWhisper-medium"
+    assert roles["vietnamese_asr"]["id"] == "vinai/PhoWhisper-large"
     assert roles["vietnamese_tts_primary"]["default_voice"] == "Trúc Ly"
     assert roles["vietnamese_tts_fallback"]["fallback_rule"].startswith("used only")
     assert roles["visual_reasoner"]["deployment"] == "H100 primary only"

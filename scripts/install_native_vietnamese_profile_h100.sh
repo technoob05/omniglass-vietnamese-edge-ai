@@ -20,7 +20,7 @@ done
 "${PYTHON}" -m py_compile "${DEMO_ROOT}/gateway.py"
 
 grep -q 'OPENGLASS_VI_ASSISTANT_PROFILE_V1' "${DEMO_ROOT}/gateway.py"
-grep -q 'speech_pad_ms=300' "${DEMO_ROOT}/static/vi/vi-chat.js"
+grep -q 'speech_pad_ms=500' "${DEMO_ROOT}/static/vi/vi-chat.js"
 grep -q 'value="Trúc Ly" selected' "${DEMO_ROOT}/static/vi/vi-chat.html"
 
 if [[ "${RELOAD}" == "true" ]]; then
