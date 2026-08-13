@@ -41,3 +41,7 @@ adb -s 17513b4 shell curl -sS -X POST http://127.0.0.1:8090/ask `
 ```
 
 This is an assistive research prototype, not a certified navigation aid.
+
+Open `http://localhost:8090` after `adb forward tcp:8090 tcp:8090` for the
+full box demo. The page shows the QNN camera stream and its hold-to-talk button
+drives box microphone → STT → VLM/router → TTS → box ALSA speaker.

@@ -30,3 +30,9 @@ def test_qwen_plain_text_is_a_supported_answer() -> None:
     answer = parse_answer("Có một người đứng bên phải.", 123.0)
     assert answer.answer_vi == "Có một người đứng bên phải."
     assert answer.uncertain is True
+
+
+def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
+    text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "loa ALSA", "Qwen3.5 2B VL"):
+        assert marker in text

@@ -1,4 +1,4 @@
-"""Dependency-free local HTTP API for the AIBOX-eye service."""
+"""Dependency-free HTTP API and full end-to-end box demo UI."""
 
 from __future__ import annotations
 
@@ -6,21 +6,28 @@ import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .orchestrator import EyeOrchestrator
 
 
-_HTML = """<!doctype html><html lang=\"vi\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
-<title>AIBOX-eye control</title><style>body{font:16px system-ui;margin:2rem;max-width:60rem;background:#10151d;color:#e8edf4}pre{background:#18202b;padding:1rem;overflow:auto}button{padding:.5rem;margin-right:.5rem}input{width:30rem;max-width:100%;padding:.5rem}</style>
-<h1>AIBOX-eye</h1><p>Safety lane reads the existing single-engine QNN service. VLM is on-demand only.</p><p><a href=\"http://127.0.0.1:8080/\">Perception stream</a> · <a href=\"/health\">health</a> · <a href=\"/scene\">scene</a> · <a href=\"/events\">events</a></p>
-<input id=q placeholder=\"Ví dụ: phía trước có gì?\"><button onclick=\"ask()\">Hỏi</button><button onclick=\"ptt('/push-to-talk/start')\">Giữ để nói</button><button onclick=\"ptt('/push-to-talk/stop')\">Dừng nói</button><pre id=o>loading…</pre>
-<script>async function get(u){let r=await fetch(u,{cache:'no-store'});return await r.json()} async function ask(){o.textContent=JSON.stringify(await get('/ask?text='+encodeURIComponent(q.value)),null,2)} async function ptt(u){let r=await fetch(u,{method:'POST'});o.textContent=await r.text()} async function refresh(){try{o.textContent=JSON.stringify(await get('/health'),null,2)}catch(e){o.textContent=e}} refresh();setInterval(refresh,2000)</script></html>""".encode("utf-8")
+_HTML = r'''<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edge AI hỗ trợ thị giác</title><style>
+body{font:16px system-ui;margin:0;background:#07111f;color:#e8edf4}main{max-width:1100px;margin:auto;padding:20px}h1{margin:0 0 6px}.grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}.card{background:#111d2e;border:1px solid #29405d;border-radius:16px;padding:16px}img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:10px}.flow{color:#8bd5ff;font-size:14px}.status{color:#73e2a7;white-space:pre-wrap} .answer{font-size:21px;line-height:1.45;min-height:100px}.muted{color:#9fb0c5}button,input{font:inherit;border-radius:10px;padding:11px;border:1px solid #45617f;background:#17283d;color:#fff}button{cursor:pointer;margin:5px 5px 0 0;font-weight:700}.talk{background:#48d597;color:#062619;border:0;width:100%;font-size:19px}.talk.active{background:#ff8e8e;color:#3a0707}input{width:calc(100% - 130px);box-sizing:border-box}pre{font-size:12px;max-height:220px;overflow:auto;background:#091421;padding:10px;border-radius:8px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style><main><h1>Edge AI hỗ trợ người mù</h1><p class="flow">Camera /dev/video2 → QNN YOLO + depth / Hexagon HTP → Whisper STT → GenieX Qwen3.5 2B VL → VieNeu TTS → loa ALSA</p><div class="grid"><section class="card"><h2>Camera box realtime</h2><img src="http://localhost:8080/stream.mjpg" alt="Camera QNN realtime"><p class="muted">Nguồn thật trên Qualcomm box. Detector/depth luôn giữ ưu tiên.</p></section><section class="card"><h2>Hội thoại rảnh tay</h2><p class="muted">Nhấn giữ nút, nói vào microphone của box, thả ra để chạy toàn bộ pipeline.</p><button id="talk" class="talk">Nhấn giữ để nói</button><p id="state" class="status">Đang kiểm tra hệ thống…</p><p><input id="q" placeholder="Hoặc nhập câu hỏi tiếng Việt"><button id="ask">Hỏi</button></p><h3>Transcript</h3><div id="transcript" class="muted">—</div><h3>Câu trả lời</h3><div id="answer" class="answer">—</div><pre id="telemetry">—</pre></section></div></main><script>
+const talk=document.getElementById('talk'),state=document.getElementById('state'),answer=document.getElementById('answer'),transcript=document.getElementById('transcript'),telemetry=document.getElementById('telemetry');let recording=false,busy=false;
+async function json(url,opt){const r=await fetch(url,opt);const j=await r.json();if(!r.ok)throw Error(j.error||j.detail||'request failed');return j}
+async function health(){try{const h=await json('/health');const t=h.resources?.npu_temperature_c;state.textContent=`${h.mode} · camera=${h.scene?.camera_ok?'OK':'OFF'} · detector=${Number(h.resources?.detector_fps||0).toFixed(1)} FPS · NPU=${Number(t||0).toFixed(1)}°C · VLM=${h.components?.vlm?.admitted?'sẵn sàng':'đang bảo vệ nhiệt'}`;telemetry.textContent=JSON.stringify({scene:h.scene,resources:h.resources,components:h.components},null,2)}catch(e){state.textContent='Lỗi health: '+e.message}}
+async function start(){if(recording||busy)return;try{await json('/push-to-talk/start',{method:'POST'});recording=true;talk.classList.add('active');talk.textContent='Đang nghe… thả để xử lý';state.textContent='Đang ghi âm microphone trên box…'}catch(e){state.textContent='Không bắt đầu được: '+e.message}}
+async function stop(){if(!recording)return;recording=false;talk.classList.remove('active');talk.textContent='Đang xử lý…';busy=true;try{const j=await json('/push-to-talk/stop',{method:'POST'});transcript.textContent=j.transcript_vi||'—';answer.textContent=j.response?.answer_vi||j.response?.error||'—';state.textContent='Đã hoàn thành · TTS đang/đã phát qua loa ALSA của box'}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false;talk.textContent='Nhấn giữ để nói'}}
+async function ask(){const q=document.getElementById('q').value.trim();if(!q||busy)return;busy=true;state.textContent='Đang chạy scene → VLM → TTS…';try{const j=await json('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:q})});transcript.textContent=q;answer.textContent=j.answer_vi||j.error||'—'}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false}}
+talk.addEventListener('pointerdown',e=>{e.preventDefault();start()});talk.addEventListener('pointerup',e=>{e.preventDefault();stop()});talk.addEventListener('pointerleave',()=>{if(recording)stop()});document.getElementById('ask').onclick=ask;setInterval(health,2000);health();
+</script></html>'''.encode("utf-8")
 
 
 def handler_factory(app: EyeOrchestrator) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
-        server_version = "AIBOX-eye/0.1"
+        server_version = "AIBOX-eye/0.2"
 
         def log_message(self, _format: str, *_args: Any) -> None:
             return
@@ -34,7 +41,7 @@ def handler_factory(app: EyeOrchestrator) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path == "/":
                 self.send_response(HTTPStatus.OK)
@@ -44,80 +51,42 @@ def handler_factory(app: EyeOrchestrator) -> type[BaseHTTPRequestHandler]:
                 self.end_headers()
                 self.wfile.write(_HTML)
                 return
-            if parsed.path == "/health":
-                self.send_json(app.health())
-                return
-            if parsed.path == "/scene":
-                self.send_json({"scene": app.latest_scene()})
-                return
-            if parsed.path == "/events":
-                self.send_json({"events": app.events()})
-                return
-            if parsed.path == "/audio/status":
-                self.send_json(app.audio.status.to_dict())
-                return
+            if parsed.path == "/health": self.send_json(app.health()); return
+            if parsed.path == "/scene": self.send_json({"scene": app.latest_scene()}); return
+            if parsed.path == "/events": self.send_json({"events": app.events()}); return
+            if parsed.path == "/audio/status": self.send_json(app.audio.status.to_dict()); return
             if parsed.path == "/metrics":
                 body = app.prometheus_metrics().encode("utf-8")
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            if parsed.path == "/ask":
-                query = _query(parsed.query)
-                self._ask(str(query.get("text", "")))
-                return
+                self.send_response(HTTPStatus.OK); self.send_header("Content-Type", "text/plain; version=0.0.4")
+                self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
+            if parsed.path == "/ask": self._ask(parse_qs(parsed.query).get("text", [""])[-1]); return
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             parsed = urlparse(self.path)
             try:
-                if parsed.path == "/ask":
-                    body = self._read_json_body()
-                    self._ask(str(body.get("text", "")))
-                    return
-                if parsed.path == "/push-to-talk/start":
-                    self.send_json(app.start_push_to_talk())
-                    return
-                if parsed.path == "/push-to-talk/stop":
-                    self.send_json(app.stop_push_to_talk())
-                    return
-                if parsed.path == "/demo/reset":
-                    self.send_json(app.reset_demo())
-                    return
+                if parsed.path == "/ask": self._ask(str(self._read_json_body().get("text", ""))); return
+                if parsed.path == "/push-to-talk/start": self.send_json(app.start_push_to_talk()); return
+                if parsed.path == "/push-to-talk/stop": self.send_json(app.stop_push_to_talk()); return
+                if parsed.path == "/demo/reset": self.send_json(app.reset_demo()); return
                 self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
-            except ValueError as error:
-                self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
-            except RuntimeError as error:
-                self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
-            except Exception as error:
-                self.send_json({"error": f"internal error: {error}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            except ValueError as error: self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            except RuntimeError as error: self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            except Exception as error: self.send_json({"error": f"internal error: {error}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
         def _ask(self, text: str) -> None:
-            try:
-                self.send_json(app.ask(text))
-            except ValueError as error:
-                self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
-            except RuntimeError as error:
-                self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            try: self.send_json(app.ask(text))
+            except ValueError as error: self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            except RuntimeError as error: self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
 
         def _read_json_body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 1 or length > 16_384:
-                raise ValueError("JSON body must be 1..16384 bytes")
+            if length < 1 or length > 16_384: raise ValueError("JSON body must be 1..16384 bytes")
             value = json.loads(self.rfile.read(length).decode("utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("JSON body must be an object")
+            if not isinstance(value, dict): raise ValueError("JSON body must be an object")
             return value
 
     return Handler
-
-
-def _query(value: str) -> dict[str, str]:
-    from urllib.parse import parse_qs
-
-    return {key: values[-1] for key, values in parse_qs(value, keep_blank_values=True).items() if values}
 
 
 def make_server(app: EyeOrchestrator, host: str, port: int) -> ThreadingHTTPServer:
