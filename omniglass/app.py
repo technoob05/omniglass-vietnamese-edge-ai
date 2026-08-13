@@ -196,8 +196,8 @@ def main():
           if (hint && state?.startedAt) hint.textContent = `Đã quay ${Math.floor((performance.now()-state.startedAt)/1000)} giây`;
           window.__omniglassTimer = null; return [];
         }"""
-        camera.start_recording(fn=None, js=start_timer_js, queue=False, show_api=False)
-        camera.stop_recording(fn=None, js=stop_timer_js, queue=False, show_api=False)
+        camera.start_recording(fn=None, js=start_timer_js, queue=False)
+        camera.stop_recording(fn=None, js=stop_timer_js, queue=False)
 
         kickoff = run.click(
             lambda: "⏳ Đang tải và giải mã video…",

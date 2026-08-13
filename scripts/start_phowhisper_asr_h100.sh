@@ -4,8 +4,10 @@ set -euo pipefail
 ROOT="${PHOWHISPER_BENCH_ROOT:-/network-volume/icse27/edge-ai/phowhisper-benchmark}"
 VENV="${PHOWHISPER_ASR_VENV:-${ROOT}/.venv}"
 SERVICE_SCRIPT="${PHOWHISPER_ASR_SCRIPT:-${ROOT}/scripts/phowhisper_asr_service.py}"
-MODEL_REVISION="55a7e3eb6c906de891f8f06a107754427dd3be79"
-MODEL_DIR="${PHOWHISPER_ASR_MODEL_DIR:-${ROOT}/models/PhoWhisper-medium-${MODEL_REVISION}}"
+MODEL_ID="${PHOWHISPER_ASR_MODEL_ID:-vinai/PhoWhisper-large}"
+MODEL_REVISION="${PHOWHISPER_ASR_MODEL_REVISION:-b9136a44b5f2ca664bd0b8f74baecf1715f6eeeb}"
+MODEL_DIR="${PHOWHISPER_ASR_MODEL_DIR:-${ROOT}/models/PhoWhisper-large-${MODEL_REVISION}}"
+ENGLISH_MODEL_DIR="${WHISPER_ENGLISH_MODEL_DIR:-/network-volume/icse27/edge-ai/vi-asr-candidates/models/whisper-large-v3-turbo-41f01f3fe87f28c78e2fbf8b568835947dd65ed9}"
 HOST="${PHOWHISPER_ASR_HOST:-127.0.0.1}"
 PORT="${PHOWHISPER_ASR_PORT:-18783}"
 INSTANCE="${PHOWHISPER_ASR_INSTANCE:-$(hostname -s)}"
@@ -16,7 +18,7 @@ LOG_FILE="${RUN_DIR}/phowhisper-asr-${PORT}.log"
 
 mkdir -p "${RUN_DIR}"
 
-for required in "${VENV}/bin/python" "${SERVICE_SCRIPT}" "${MODEL_DIR}/pytorch_model.bin"; do
+for required in "${VENV}/bin/python" "${SERVICE_SCRIPT}" "${MODEL_DIR}/pytorch_model.bin" "${ENGLISH_MODEL_DIR}/model.safetensors"; do
   if [[ ! -e "${required}" ]]; then
     echo "Missing required path: ${required}" >&2
     exit 1
@@ -41,6 +43,9 @@ nohup "${VENV}/bin/python" "${SERVICE_SCRIPT}" \
   --host "${HOST}" \
   --port "${PORT}" \
   --model-dir "${MODEL_DIR}" \
+  --model-id "${MODEL_ID}" \
+  --model-revision "${MODEL_REVISION}" \
+  --english-model-dir "${ENGLISH_MODEL_DIR}" \
   >"${LOG_FILE}" 2>&1 &
 pid=$!
 echo "${pid}" >"${PID_FILE}"

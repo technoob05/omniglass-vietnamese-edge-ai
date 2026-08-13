@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at_utc": "2026-08-11T18:00:00Z",
+  "generated_at_utc": "2026-08-13T08:15:00Z",
   "profile": "omniglass-vietnamese-realtime-h100",
   "status": "deployed_and_e2e_verified",
   "browser_url_local_tunnel": "https://127.0.0.1:8006/vi",
@@ -10,12 +10,19 @@
   },
   "runtime": {
     "gateway": "MiniCPM-o-Demo mode=chat over HTTPS/WSS",
-    "camera": "browser getUserMedia rear-camera preferred",
+    "camera": "browser getUserMedia rear-camera preferred; 640 px perception frames every 650 ms",
     "audio_capture": "browser AudioWorklet, stateful resample to PCM16LE mono 16 kHz",
     "audio_playback": "browser AudioContext, contiguous PCM16 chunk scheduling at 48 kHz",
     "tts_start_policy": "sentence-buffered early TTS by default; /vi?early_tts=0 is the rollback",
     "session_policy": "one immutable ASR final per VLM turn; five-turn rolling text history",
-    "privacy": "camera frames are captured on finalized speech only; no raw media logging by the VI profile"
+    "privacy": "fresh full frame is captured on finalized speech; downscaled perception frames are processed in memory only and raw media is not logged",
+    "visual_memory": "bounded 800-observation YOLO/ByteTrack history per browser session; compact top-12 last-seen context",
+    "perception_policy": "YOLO runs continuously; monocular depth runs every fifth accepted frame and is explicitly uncalibrated"
+    ,"safety_policy": "deterministic geometry/depth/tracking rules run on every perception result without VLM; server cooldowns suppress repeated alerts"
+    ,"tts_playback_rate": 1.5
+    ,"conversation_routing": "VLM-first for scene, distance, traffic, crossing and memory questions; deterministic rules only handle background alerts and explicit control commands"
+    ,"multi_frame": "up to three bounded recent 768 px frames plus one fresh current frame per VLM turn"
+    ,"language_switch": "warm vi/en ASR reconnect preserves camera, perception session and visual memory"
   },
   "models": [
     {
@@ -30,13 +37,20 @@
     },
     {
       "role": "vietnamese_asr",
-      "id": "vinai/PhoWhisper-medium",
-      "revision": "55a7e3eb6c906de891f8f06a107754427dd3be79",
+      "id": "vinai/PhoWhisper-large",
+      "revision": "b9136a44b5f2ca664bd0b8f74baecf1715f6eeeb",
       "source_commit": "b06f1937995cfee75b9e4ad3e2ae0798faf1a562",
       "precision": "FP16",
       "license": "BSD-3-Clause",
-      "endpointing": "silero-vad 6.2.1; 500 ms trailing silence; 300 ms speech padding in /vi",
+      "endpointing": "silero-vad 6.2.1; 650 ms trailing silence; 500 ms speech padding in /vi",
       "semantics": "VAD-finalized utterance ASR, not incremental decoder streaming"
+    },
+    {
+      "role": "english_asr",
+      "id": "openai/whisper-large-v3-turbo",
+      "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+      "precision": "FP16",
+      "deployment": "resident bilingual ASR service; selected by language=en"
     },
     {
       "role": "vietnamese_tts_primary",
@@ -54,20 +68,35 @@
       "license": "CC-BY-NC-4.0",
       "stream_format": "complete WAV base64",
       "fallback_rule": "used only when VieNeu fails before emitting its first audio chunk"
+    },
+    {
+      "role": "continuous_detector_tracker",
+      "id": "Ultralytics YOLO11n + ByteTrack",
+      "precision": "CUDA FP32/automatic",
+      "deployment": "H100 primary; independent bounded service",
+      "context_limit": "10 current detections and 12 last-seen rows per VLM turn"
+    },
+    {
+      "role": "advisory_monocular_depth",
+      "id": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
+      "precision": "CUDA FP16 autocast",
+      "deployment": "every fifth perception frame",
+      "calibrated": false,
+      "safety_boundary": "never asserts a safe route or certified obstacle distance"
     }
   ],
   "source_artifacts": [
     {
       "path": "native-overrides/vi-profile/vi-chat.html",
-      "sha256": "3ef13245059350a39dd94d4564acfc3bd4b262a8bce6f00d3d1d59cdcebdd837"
+      "sha256": "4ac4a3ed7de009361b37cf7696099eca7f74f8feaf8bbd3eddb773b9311fcfa6"
     },
     {
       "path": "native-overrides/vi-profile/vi-chat.js",
-      "sha256": "8ce03449aa2320f744c3439479b3395431afef4bd94f2ec589f6d0560dc49f64"
+      "sha256": "1ca911261a771a60f5209bc20f908face9b58f175e3ea02839b66f8300949ff9"
     },
     {
       "path": "scripts/phowhisper_asr_service.py",
-      "sha256": "23993b52390b32c8205de0620fbc6b922ff6f789d7da65f139f83da2a901ce1e"
+      "sha256": "4110aec227dd9317cbd2c1c791e34fb6f9a16f3bd794d409c18f5612d7d0921f"
     },
     {
       "path": "scripts/native_vieneu_tts_service.py",
@@ -80,9 +109,31 @@
     {
       "path": "scripts/patch_native_vietnamese_tts.py",
       "sha256": "a98839ccf88094e69c8165eec72893dca429c543cc4be0f341ae2adcd5f6b964"
+    },
+    {
+      "path": "scripts/h100_perception_service.py",
+      "sha256": "12e4e33274f1396d1a0051b90e560e3d30a33300d055c06f0c569562f32e75bb"
+    },
+    {
+      "path": "scripts/patch_native_h100_perception.py",
+      "sha256": "4a2b5a38d0d787f5a025620b51f7697ac649fd3c65576593826a585c5d86c291"
+    },
+    {
+      "path": "scripts/start_h100_perception.sh",
+      "sha256": "6cfdae81d78c0bb7e02618ea04b594cf9f783f419b43ef645db80270cbf18d56"
     }
   ],
   "verified_results": {
+    "integrated_perception_browser_e2e_3turn": {
+      "passed": true,
+      "continuous_perception_frames_observed": 50,
+      "perception_context_message_counts": [3, 5, 7],
+      "distinct_vlm_frame_hashes": 3,
+      "tts_stream_http_200_minimum": 3,
+      "warm_yolo_inference_ms_observed": "7-14",
+      "warm_depth_frame_ms_observed": 47.1,
+      "artifact": "results/vi_profile_e2e/report.json"
+    },
     "browser_e2e_3turn": {
       "passed": true,
       "unique_immutable_asr_finals": 3,
@@ -131,8 +182,11 @@
       "medium_normalized_cer": 0.060612,
       "medium_inference_p95_ms": 979.3,
       "large_normalized_wer": 0.086158,
-      "decision": "medium retained for realtime latency and memory",
-      "artifact": "artifacts/phowhisper-medium-vs-large-fleurs-vi-test50.json"
+      "large_normalized_cer": 0.053061,
+      "large_inference_p95_ms": 988.8,
+      "large_throughput_rtf": 0.053626,
+      "decision": "large promoted after production-H100 quality/latency/VRAM verification",
+      "artifact": "artifacts/phowhisper-large-fleurs-vi-test50.json"
     },
     "tts": {
       "vieneu_first_chunk_median_ms": 127.5,
@@ -142,7 +196,7 @@
       "mms_complete_wav_p95_ms": 118.3
     },
     "regression_suite": {
-      "passed": 71,
+      "passed": 158,
       "failed": 0
     }
   },
@@ -151,13 +205,15 @@
       "ASR endpoint-to-final P95 <= 1.0 s on synthetic protocol soak",
       "frame age P95 <= 250 ms",
       "MiniCPM input-to-first-text P95 <= 1.0 s",
-      "exactly-once turn routing and no duplicate frame/action"
+      "exactly-once turn routing and no duplicate frame/action",
+      "continuous YOLO perception does not break three-turn ASR/VLM/TTS browser acceptance"
     ],
     "not_yet_passed": [
       "normalized clean-read ASR WER <= 8%",
       "speech end to first audible response P95 <= 2.0 s",
       "100-turn and 30-minute soak",
       "regional-accent/noise/glasses-microphone quality set",
+      "calibrated stereo/depth safety validation and obstacle-warning acceptance",
       "physical QCS8550/QCS6490 deployment"
     ]
   },

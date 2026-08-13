@@ -18,8 +18,10 @@ MOSS_TOKENIZER_ROOT="${OPENGLASS_MOSS_TOKENIZER:-${ROOT}/models/MOSS-Audio-Token
 ASR_ROOT="${OPENGLASS_PHOWHISPER_ROOT:-/network-volume/icse27/edge-ai/phowhisper-benchmark}"
 ASR_PYTHON="${OPENGLASS_PHOWHISPER_PYTHON:-${ASR_ROOT}/.venv/bin/python}"
 ASR_SERVICE="${OPENGLASS_PHOWHISPER_SERVICE:-${ASR_ROOT}/scripts/phowhisper_asr_service.py}"
-ASR_MODEL_REVISION="55a7e3eb6c906de891f8f06a107754427dd3be79"
-ASR_MODEL_ROOT="${OPENGLASS_PHOWHISPER_MODEL:-${ASR_ROOT}/models/PhoWhisper-medium-${ASR_MODEL_REVISION}}"
+ASR_MODEL_ID="${OPENGLASS_PHOWHISPER_MODEL_ID:-vinai/PhoWhisper-large}"
+ASR_MODEL_REVISION="${OPENGLASS_PHOWHISPER_MODEL_REVISION:-b9136a44b5f2ca664bd0b8f74baecf1715f6eeeb}"
+ASR_MODEL_ROOT="${OPENGLASS_PHOWHISPER_MODEL:-${ASR_ROOT}/models/PhoWhisper-large-${ASR_MODEL_REVISION}}"
+ASR_ENGLISH_MODEL_ROOT="${OPENGLASS_ENGLISH_WHISPER_MODEL:-/network-volume/icse27/edge-ai/vi-asr-candidates/models/whisper-large-v3-turbo-41f01f3fe87f28c78e2fbf8b568835947dd65ed9}"
 ASR_ENABLED="${OPENGLASS_PHOWHISPER_ENABLED:-true}"
 ASR_REQUIRED="${OPENGLASS_PHOWHISPER_REQUIRED:-false}"
 HTTP_KEEPALIVE_SECONDS="${OPENGLASS_HTTP_KEEPALIVE_SECONDS:-60}"
@@ -154,6 +156,8 @@ if [[ "${asr_available}" == "true" ]]; then
   CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" nohup "${ASR_PYTHON}" \
     "${ASR_SERVICE}" \
     --host 127.0.0.1 --port 18783 --model-dir "${ASR_MODEL_ROOT}" \
+    --model-id "${ASR_MODEL_ID}" --model-revision "${ASR_MODEL_REVISION}" \
+    --english-model-dir "${ASR_ENGLISH_MODEL_ROOT}" \
     >"${LOG_ROOT}/vi_asr_phowhisper.log" 2>&1 </dev/null &
   echo $! >"${RUN_ROOT}/vi_asr.pid"
   if wait_http "http://127.0.0.1:18783/health" 180 false; then
