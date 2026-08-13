@@ -1,0 +1,58 @@
+{
+  "api": {"port": 8090},
+  "perception": {
+    "base_url": "http://127.0.0.1:8080",
+    "poll_hz": 5.0,
+    "stale_after_ms": 500.0
+  },
+  "calibration": {
+    "enabled": false,
+    "dangerous_overestimate_p99_m": 0.0,
+    "valid_min_m": 0.30,
+    "valid_max_m": 5.0
+  },
+  "risk": {
+    "enable_uncalibrated_motion_alerts": false,
+    "enable_dense_grid_hazards": false
+  },
+  "audio": {
+    "capture_device": "hw:CARD=WEBCAM,DEV=0",
+    "playback_device": "plughw:CARD=Device,DEV=0",
+    "playback_backend": "alsa",
+    "tempo": 1.5,
+    "asset_dir": "assets",
+    "half_duplex": true
+  },
+  "stt": {
+    "backend": "whisper_cli_cpu",
+    "command": "/data/local/tmp/aibox-eye/whisper.cpp/build/bin/whisper-cli --model {model} --file {audio} --language {language} --output-json --output-file {output} --no-prints --threads 3 --vad --vad-model {vad_model} --vad-threshold {vad_threshold} --vad-min-speech-duration-ms {vad_min_speech_ms} --vad-min-silence-duration-ms {vad_min_silence_ms} --no-speech-thold 0.70 --suppress-nst --prompt \"{initial_prompt}\"",
+    "model": "/data/local/tmp/aibox-eye/models/whisper/ggml-small-q8_0.bin",
+    "vad_enabled": true,
+    "vad_model": "/data/local/tmp/aibox-eye/models/vad/ggml-silero-v6.2.0.bin",
+    "vad_threshold": 0.50,
+    "vad_min_speech_ms": 250,
+    "vad_min_silence_ms": 400,
+    "initial_prompt": "vật cản, khoảng cách, phía trước, bên trái, bên phải"
+  },
+  "tts": {
+    "backend": "vieneu_onnx",
+    "voice": "Thái Sơn",
+    "tempo": 1.5,
+    "threads": 3,
+    "model_dir": "models/vieneu"
+  },
+  "vlm": {
+    "backend": "llama_cpp",
+    "base_url": "http://127.0.0.1:18181",
+    "model": "local/Qwen3.5-2B-GGUF:Q4_0",
+    "timeout_seconds": 90.0,
+    "max_tokens": 80,
+    "temperature": 0.0,
+    "max_frame_age_ms": 500.0
+  },
+  "resource_guard": {
+    "min_detector_fps_for_vlm": 18.0,
+    "max_npu_temperature_c_for_vlm": 75.0
+  },
+  "storage": {"root": "/data/local/tmp/aibox-eye", "max_event_history": 256}
+}

@@ -66,7 +66,13 @@ def test_build_is_revision_pinned_and_never_mutates_services() -> None:
     assert "llama-omni-cli" in source
     assert "llama-omni-server" in source
     assert "llama-omni-single-test-omni" in source
+    assert 'BUILD_LLAMA_CLI="${BUILD_LLAMA_CLI:-0}"' in source
+    assert "same --list-devices probe" in source
     assert "BUILD_EVIDENCE.txt" in source
+    assert "RUNTIME_DEPENDENCIES.txt" in source
+    assert "RUNTIME_FILES.txt" in source
+    assert "libggml-htp-v73.so" in source
+    assert "cmake --install" in source  # retained in the explanation of why staging is explicit
     for forbidden in ("pkill", "systemctl", "service ", "rm -rf"):
         assert forbidden not in source
 
@@ -103,10 +109,22 @@ def test_board_harness_compares_cpu_and_htp_and_rejects_silent_fallback() -> Non
     assert "llama-mtmd-cli" in source
     assert "llama-bench" in source
     assert "--list-devices" in source
+    assert 'DEVICE_PROBE="${CLI}"' in source
     assert "GGML_HEXAGON_VERBOSE=1" in source
     assert "GGML_HEXAGON_PROFILE=1" in source
+    assert "GGML_SCHED_DEBUG=1" in source
+    assert 'MTMD_BACKEND_DEVICE="${device}"' in source
+    assert "--mmproj-offload" in source
     assert "--no-mmproj-offload" in source
+    assert "CLIP using ${device} backend" in source
+    assert "profile-op" in source
+    assert "graph-compute n_nodes" in source
+    assert "HTP initialization/operator failure or explicit fallback was observed" in source
     assert "/usr/bin/time" in source
+    assert "os.wait4" in source
+    assert "Maximum resident set size (kbytes)" in source
+    assert "runtime_dependencies.txt" in source
+    assert "An ARM64 runtime dependency is missing" in source
     assert "thermal_zone" in source
     assert "rejecting silent fallback" in source
     for forbidden in ("pkill", "systemctl", "service ", "rm -rf"):

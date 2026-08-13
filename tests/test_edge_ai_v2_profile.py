@@ -1,0 +1,32 @@
+import json
+from pathlib import Path
+
+
+ROOT = Path(__file__).parents[1]
+PROFILE = ROOT / "versions" / "edge-ai-v2" / "device" / "config" / "qwen35-production.json"
+
+
+def test_qwen35_profile_is_complete_and_local() -> None:
+    config = json.loads(PROFILE.read_text(encoding="utf-8"))
+    assert config["perception"]["base_url"] == "http://127.0.0.1:8080"
+    assert config["vlm"]["base_url"] == "http://127.0.0.1:18181"
+    assert config["vlm"]["model"] == "local/Qwen3.5-2B-GGUF:Q4_0"
+    assert config["stt"]["backend"] == "whisper_cli_cpu"
+    assert config["tts"]["backend"] == "vieneu_onnx"
+    assert config["audio"]["half_duplex"] is True
+
+
+def test_snapshot_documents_the_end_to_end_contract() -> None:
+    text = (ROOT / "versions" / "edge-ai-v2" / "README.md").read_text(encoding="utf-8")
+    for marker in ("Whisper.cpp", "Qwen3.5-2B-GGUF:Q4_0", "VieNeu", "Hexagon HTP"):
+        assert marker in text
+
+
+def test_qwen_plain_text_is_a_supported_answer() -> None:
+    import sys
+    sys.path.insert(0, str(ROOT / "versions" / "edge-ai-v2" / "device"))
+    from aibox_eye.vlm import parse_answer
+
+    answer = parse_answer("Có một người đứng bên phải.", 123.0)
+    assert answer.answer_vi == "Có một người đứng bên phải."
+    assert answer.uncertain is True

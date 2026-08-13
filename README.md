@@ -1,5 +1,7 @@
 # OmniGlass
 
+> **Main demo:** [OpenGlass 9B — MiniCPM-o 4.5](OPENGLASS_9B.md). Start there for the glasses demo.
+
 Local-first visual assistance prototype with one shared perception pass and one continual
 memory serving four skills: **See, Remember, Find, and Watch**.
 
