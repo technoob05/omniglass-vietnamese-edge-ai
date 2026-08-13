@@ -94,4 +94,30 @@ box microphone and run Whisper/VAD without invoking Qwen or TTS; the page shows
 the Vietnamese transcript, captured-audio duration, STT latency, RTF, sample
 rate, VAD state, and detector FPS. Full assistant turns include the same STT
 measurements in the end-to-end performance panel.
+
+The production STT profile uses multilingual Whisper Base Q8 on three CPU NEON
+threads. Install the pinned, checksum-verified model from the host before first
+deployment:
+
+```powershell
+.\scripts\install_whisper_base_q8.ps1 -Serial 17513b4
+```
+
+On the live QCS8550 workload, Base Q8 reduced the 3.44 s loopback case from
+14.82 s (Small Q8, RTF 4.31) to 4.76 s (RTF 1.38). Bounding the encoder audio
+context to 512 frames reduced an 8.75 s real box-mic recording from 4.53 s to
+2.48 s (RTF 0.28) while preserving all three spoken questions and keeping QNN
+perception live. This profile is intended for short push-to-talk questions.
+Tiny Q8 was faster on the short clip but hallucinated repeated spatial
+directions on real microphone audio, so it is not the safety-facing default.
+
+Direct `whisper-stream` capture was also built and exercised on the box. It is
+not enabled in the safety profile: with 1.5 s chunks the full Base encoder took
+about 2.7 s per chunk and produced Vietnamese hallucinations on ambient/silent
+input. The production path therefore records continuously while the button is
+held, applies Silero VAD, and returns a bounded final transcript after release.
+Moving Whisper to HTP requires a separately exported QNN Whisper context and a
+detector-concurrency soak test; the installed `whisper.cpp` model cannot be
+routed to HTP merely by changing a runtime flag.
+
 drives box microphone → STT → VLM/router → TTS → box ALSA speaker.

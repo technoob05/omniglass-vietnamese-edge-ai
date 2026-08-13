@@ -25,8 +25,8 @@
   },
   "stt": {
     "backend": "whisper_cli_cpu",
-    "command": "/data/local/tmp/aibox-eye/whisper.cpp/build/bin/whisper-cli --model {model} --file {audio} --language {language} --output-json --output-file {output} --no-prints --threads 3 --vad --vad-model {vad_model} --vad-threshold {vad_threshold} --vad-min-speech-duration-ms {vad_min_speech_ms} --vad-min-silence-duration-ms {vad_min_silence_ms} --no-speech-thold 0.70 --suppress-nst --prompt \"{initial_prompt}\"",
-    "model": "/data/local/tmp/aibox-eye/models/whisper/ggml-small-q8_0.bin",
+    "command": "/data/local/tmp/aibox-eye/whisper.cpp/build/bin/whisper-cli --model {model} --file {audio} --language {language} --output-json --output-file {output} --no-prints --threads 3 --audio-ctx 512 --vad --vad-model {vad_model} --vad-threshold {vad_threshold} --vad-min-speech-duration-ms {vad_min_speech_ms} --vad-min-silence-duration-ms {vad_min_silence_ms} --no-speech-thold 0.70 --suppress-nst --prompt \"{initial_prompt}\"",
+    "model": "/data/local/tmp/aibox-eye/models/whisper/ggml-base-q8_0.bin",
     "vad_enabled": true,
     "vad_model": "/data/local/tmp/aibox-eye/models/vad/ggml-silero-v6.2.0.bin",
     "vad_threshold": 0.50,

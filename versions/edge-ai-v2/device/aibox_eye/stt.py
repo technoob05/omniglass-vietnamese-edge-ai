@@ -108,6 +108,11 @@ class WhisperCliBackend:
             "backend": "whisper_cli_cpu",
             "command": command,
             "model": self.model,
+            "model_name": Path(self.model).name,
+            "accelerator": "cpu_neon",
+            "inference_mode": "vad_bounded_final",
+            "audio_context_frames": 512,
+            "audio_context_seconds": 10.24,
             "vad": {
                 "enabled": self.vad_enabled,
                 "model": self.vad_model,

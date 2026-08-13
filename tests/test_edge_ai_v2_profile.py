@@ -15,6 +15,8 @@ def test_qwen35_profile_is_complete_and_local() -> None:
     assert config["vlm"]["max_image_width"] == 512
     assert config["vlm"]["stream"] is True
     assert config["stt"]["backend"] == "whisper_cli_cpu"
+    assert config["stt"]["model"].endswith("ggml-base-q8_0.bin")
+    assert "--audio-ctx 512" in config["stt"]["command"]
     assert config["tts"]["backend"] == "vieneu_onnx"
     assert config["tts"]["voice"] == "Phạm Tuyên"
     assert config["tts"]["tempo"] == 1.5
