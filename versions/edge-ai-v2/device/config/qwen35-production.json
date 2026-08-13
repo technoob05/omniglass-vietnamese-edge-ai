@@ -19,7 +19,7 @@
     "capture_device": "hw:CARD=WEBCAM,DEV=0",
     "playback_device": "plughw:CARD=Device,DEV=0",
     "playback_backend": "alsa",
-    "tempo": 1.5,
+    "tempo": 1.25,
     "asset_dir": "assets",
     "half_duplex": true
   },
@@ -37,7 +37,7 @@
   "tts": {
     "backend": "vieneu_onnx",
     "voice": "Thái Sơn",
-    "tempo": 1.5,
+    "tempo": 1.25,
     "threads": 3,
     "model_dir": "models/vieneu"
   },

@@ -38,6 +38,19 @@ with label, confidence, zone, and normalized bounding box. Uncalibrated depth
 values are never exposed as metres. The last two text turns are retained only
 to resolve follow-up wording; old visual facts are never reused.
 
+VieNeu speaks the exact semantic response produced by Qwen: the first streamed
+phrase is queued immediately, then the remaining text is synthesized in order
+by one serial TTS worker. A speech-only normalization layer expands English
+object labels and units (for example `laptop`, `FPS`, `NPU`, and `°C`) into
+Vietnamese pronunciations without replacing the answer. Rendered phrases are
+cached by voice, tempo, and normalized text. Common fallback phrases are
+pre-rendered at startup, while P0/P1 safety WAV assets retain playback priority.
+
+The web demo exposes `POST /tts/speak` and a **Phát TTS** button for direct
+speaker verification. On the connected box, a persisted cache hit reached the
+ALSA queue in 139 ms; a new dynamic sentence reached it in 3.77 s before being
+cached for later turns.
+
 On the connected QCS8550 box, the validated warm turn reached first VLM text
 in 4.12 s and completed VLM decoding in 8.31 s while QNN perception remained at
 23.7 FPS. Total request time was 12.88 s including a 4.1 s thermal admission

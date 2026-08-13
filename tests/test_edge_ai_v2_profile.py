@@ -16,6 +16,7 @@ def test_qwen35_profile_is_complete_and_local() -> None:
     assert config["vlm"]["stream"] is True
     assert config["stt"]["backend"] == "whisper_cli_cpu"
     assert config["tts"]["backend"] == "vieneu_onnx"
+    assert config["tts"]["tempo"] == 1.25
     assert config["audio"]["half_duplex"] is True
 
 
@@ -52,7 +53,7 @@ def test_vlm_frame_is_resized_for_edge_inference() -> None:
 
 def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
-    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "loa ALSA", "Qwen3.5 2B VL"):
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "loa ALSA", "Qwen3.5 2B VL"):
         assert marker in text
 
 
@@ -104,3 +105,21 @@ def test_overlapping_detector_boxes_are_deduplicated_for_qwen_context() -> None:
 
     assert _intersection_over_smaller((10, 10, 40, 60), (10, 10, 80, 100)) == 1.0
     assert _intersection_over_smaller((0, 0, 10, 10), (20, 20, 30, 30)) == 0.0
+
+
+def test_vieneu_text_is_localized_and_chunked_for_clear_speech() -> None:
+    import sys
+    sys.path.insert(0, str(ROOT / "versions" / "edge-ai-v2" / "device"))
+    from aibox_eye.tts import normalize_vi_text, phrase_chunks
+
+    spoken = normalize_vi_text("Laptop chạy 24 FPS, NPU 75°C và USB ổn định.")
+    assert spoken == "máy tính xách tay chạy 24 khung hình mỗi giây, en pi diu 75 độ C và u ét bê ổn định."
+    chunks = phrase_chunks("một hai ba bốn năm sáu bảy tám chín mười mười một mười hai mười ba", maximum_words=12)
+    assert chunks[0].endswith(",")
+    assert len(chunks) == 2
+
+
+def test_tts_cache_key_includes_voice_tempo_and_normalized_text() -> None:
+    text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "tts.py").read_text(encoding="utf-8")
+    for marker in ("tts-cache", "cache_hits", "cache_misses", "self.config['voice']", "self.config['tempo']"):
+        assert marker in text

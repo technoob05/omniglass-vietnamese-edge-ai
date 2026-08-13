@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import threading
@@ -10,7 +11,25 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
+_SPEECH_REPLACEMENTS = (
+    (r"\blaptop\b", "máy tính xách tay"),
+    (r"\bmouse\b", "chuột"),
+    (r"\bkeyboard\b", "bàn phím"),
+    (r"\bbackpack\b", "ba lô"),
+    (r"\bUSB\b", "u ét bê"),
+    (r"\bFPS\b", "khung hình mỗi giây"),
+    (r"\bNPU\b", "en pi diu"),
+    (r"\bHTP\b", "hát tê pê"),
+    (r"\bcamera\b", "ca mê ra"),
+)
+
+
 def normalize_vi_text(text: str) -> str:
+    text = re.sub(r"[`*_#{}\[\]]", " ", text)
+    for pattern, replacement in _SPEECH_REPLACEMENTS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=\d)\s*°\s*C\b", " độ C", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=\d)\s*%", " phần trăm", text)
     text = re.sub(r"\s+", " ", text.strip())
     text = text.replace("~", "khoảng")
     return text
@@ -18,12 +37,12 @@ def normalize_vi_text(text: str) -> str:
 
 def phrase_chunks(text: str, maximum_words: int = 12) -> list[str]:
     """Bound first-audio latency without cutting within a Vietnamese word."""
-    sentences = re.split(r"(?<=[.!?;:])\s+", normalize_vi_text(text))
+    sentences = re.split(r"(?<=[.!?])\s+", normalize_vi_text(text))
     chunks: list[str] = []
     for sentence in sentences:
         words = sentence.split()
         while len(words) > maximum_words:
-            chunks.append(" ".join(words[:maximum_words]))
+            chunks.append(" ".join(words[:maximum_words]).rstrip(",;:") + ",")
             words = words[maximum_words:]
         if words:
             chunks.append(" ".join(words))
@@ -49,8 +68,11 @@ class VieneuTtsBackend:
         self.config = config
         self.storage_root = storage_root
         self._engine: Any | None = None
-        self._engine_lock = threading.Lock()
+        self._engine_lock = threading.RLock()
         self._load_error = "not loaded"
+        self._cache_root = self.storage_root / "outputs" / "tts-cache"
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def health(self) -> dict[str, Any]:
         return {
@@ -59,36 +81,38 @@ class VieneuTtsBackend:
             "detail": self._load_error,
             "voice": self.config["voice"],
             "tempo": self.config["tempo"],
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
         }
 
     def _load(self) -> Any:
-        if self._engine is not None:
-            return self._engine
-        try:
-            from vieneu import Vieneu  # type: ignore
-            model_dir = self.storage_root / str(self.config.get("model_dir", "models/vieneu"))
-            graph_dir = model_dir / "onnx_int8"
-            codec_dir = model_dir / "codec"
-            if not graph_dir.is_dir() or not codec_dir.is_dir():
-                raise FileNotFoundError(
-                    f"VieNeu local artifacts are missing: {graph_dir} or {codec_dir}"
+        with self._engine_lock:
+            if self._engine is not None:
+                return self._engine
+            try:
+                from vieneu import Vieneu  # type: ignore
+                model_dir = self.storage_root / str(self.config.get("model_dir", "models/vieneu"))
+                graph_dir = model_dir / "onnx_int8"
+                codec_dir = model_dir / "codec"
+                if not graph_dir.is_dir() or not codec_dir.is_dir():
+                    raise FileNotFoundError(
+                        f"VieNeu local artifacts are missing: {graph_dir} or {codec_dir}"
+                    )
+                # VieNeu v3 Turbo exposes an ONNX INT8 CPU backend.  Pin both
+                # values instead of relying on automatic torch/GPU detection.
+                self._engine = Vieneu(
+                    backbone_repo=str(model_dir),
+                    backend="onnx",
+                    precision="int8",
+                    threads=int(self.config.get("threads", 3)),
+                    onnx_dir=str(graph_dir),
+                    codec_dir=str(codec_dir),
                 )
-            # VieNeu v3 Turbo exposes an ONNX INT8 CPU backend.  Pin both
-            # values instead of relying on automatic torch/GPU detection, so
-            # installation of an unrelated accelerator never changes latency.
-            self._engine = Vieneu(
-                backbone_repo=str(model_dir),
-                backend="onnx",
-                precision="int8",
-                threads=int(self.config.get("threads", 3)),
-                onnx_dir=str(graph_dir),
-                codec_dir=str(codec_dir),
-            )
-            self._load_error = ""
-            return self._engine
-        except Exception as error:
-            self._load_error = str(error)
-            raise RuntimeError(f"Cannot load VieNeu ONNX backend: {error}") from error
+                self._load_error = ""
+                return self._engine
+            except Exception as error:
+                self._load_error = str(error)
+                raise RuntimeError(f"Cannot load VieNeu ONNX backend: {error}") from error
 
     def render(self, text: str, output_dir: Path) -> list[Path]:
         return list(self.render_chunks(text, output_dir))
@@ -102,22 +126,41 @@ class VieneuTtsBackend:
         """
         engine = self._load()
         output_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_root.mkdir(parents=True, exist_ok=True)
         for index, phrase in enumerate(phrase_chunks(text)):
+            normalized = normalize_vi_text(phrase)
+            cache_key = hashlib.sha256(
+                f"v2|{self.config['voice']}|{self.config['tempo']}|{normalized}".encode("utf-8")
+            ).hexdigest()
+            cached = self._cache_root / f"{cache_key}.wav"
+            if cached.is_file() and cached.stat().st_size > 44:
+                self._cache_hits += 1
+                yield cached
+                continue
+            self._cache_misses += 1
             stem = f"tts-{time.monotonic_ns()}-{index}"
             source = output_dir / f"{stem}-source.wav"
-            output = output_dir / f"{stem}.wav"
+            output = output_dir / f"{stem}-cache.wav"
             # Streaming VLM may finish while its first phrase is already being
             # synthesised. VieNeu's ONNX session is shared and must remain
             # serial even though playback itself is asynchronous.
             with self._engine_lock:
-                audio = engine.infer(normalize_vi_text(phrase), voice=self.config["voice"])
+                audio = engine.infer(normalized, voice=self.config["voice"])
                 engine.save(audio, str(source))
             self._tempo(source, output)
-            yield output
+            output.replace(cached)
+            source.unlink(missing_ok=True)
+            yield cached
 
     def warm(self) -> None:
         """Load local ONNX sessions before a user asks the first question."""
         self._load()
+
+    def prime_cache(self, phrases: list[str], output_dir: Path) -> None:
+        """Render common fallback phrases without submitting them to ALSA."""
+        for phrase in phrases:
+            for _path in self.render_chunks(phrase, output_dir):
+                pass
 
     def _tempo(self, source: Path, output: Path) -> None:
         tempo = float(self.config["tempo"])

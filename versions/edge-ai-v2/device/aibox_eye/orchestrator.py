@@ -33,6 +33,13 @@ _ALERT_ASSETS = {
     "p2_warning": "cached_alerts/p2_warning.wav",
 }
 
+_TTS_FAST_PHRASES = [
+    "Qwen đang làm mát.",
+    "Mình chưa nhìn rõ.",
+    "Bạn vui lòng thử lại.",
+    "Camera đang hoạt động.",
+]
+
 
 class EyeOrchestrator:
     """Thread-safe application service used by the HTTP server and risk loop."""
@@ -47,6 +54,9 @@ class EyeOrchestrator:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._poll_thread: threading.Thread | None = None
+        self._tts_thread: threading.Thread | None = None
+        self._tts_condition = threading.Condition()
+        self._tts_queue: collections.deque[tuple[str, str]] = collections.deque(maxlen=32)
         self._scene: SceneSnapshot | None = None
         self._mode = SystemMode.BOOTING
         self._events: collections.deque[HazardEvent] = collections.deque(
@@ -109,14 +119,20 @@ class EyeOrchestrator:
         self._stop.clear()
         self._poll_thread = threading.Thread(target=self._poll_loop, name="aibox-scene-risk", daemon=True)
         self._poll_thread.start()
+        self._tts_thread = threading.Thread(target=self._tts_loop, name="aibox-tts-queue", daemon=True)
+        self._tts_thread.start()
         if self.config["tts"]["backend"] == "vieneu_onnx":
             self._tts_warming = True
             threading.Thread(target=self._warm_tts, name="aibox-tts-warm", daemon=True).start()
 
     def close(self) -> None:
         self._stop.set()
+        with self._tts_condition:
+            self._tts_condition.notify_all()
         if self._poll_thread is not None:
             self._poll_thread.join(timeout=2.0)
+        if self._tts_thread is not None:
+            self._tts_thread.join(timeout=2.0)
         self.recorder.abort()
         self.audio.close()
 
@@ -371,21 +387,45 @@ class EyeOrchestrator:
     def _speak_async(self, text_vi: str, source: str) -> None:
         with self._lock:
             self._stats["tts_requests"] += 1
-        threading.Thread(target=self._render_and_queue, args=(text_vi, source), name="aibox-tts", daemon=True).start()
+        with self._tts_condition:
+            self._tts_queue.append((text_vi, source))
+            self._tts_condition.notify()
 
-    def _render_and_queue(self, text_vi: str, source: str) -> None:
-        try:
-            for path in self.tts.render_chunks(text_vi, self.outputs_dir / "tts"):
-                self.audio.submit_file(path, AlertPriority.INFORMATION, source)
-        except Exception:
-            with self._lock:
-                self._stats["tts_failures"] += 1
-        finally:
-            self._restore_mode()
+    def _tts_loop(self) -> None:
+        """Serialize VieNeu jobs so streamed prefixes cannot overtake suffixes."""
+        while not self._stop.is_set():
+            with self._tts_condition:
+                self._tts_condition.wait_for(lambda: self._tts_queue or self._stop.is_set())
+                if self._stop.is_set():
+                    return
+                text_vi, source = self._tts_queue.popleft()
+            try:
+                for path in self.tts.render_chunks(text_vi, self.outputs_dir / "tts"):
+                    self.audio.submit_file(path, AlertPriority.INFORMATION, source, text_vi=text_vi)
+            except Exception:
+                with self._lock:
+                    self._stats["tts_failures"] += 1
+            finally:
+                self._restore_mode()
+
+    def speak_text(self, text_vi: str) -> dict[str, Any]:
+        text_vi = " ".join(text_vi.strip().split())
+        if not text_vi or len(text_vi) > 300:
+            raise ValueError("text must contain 1..300 characters")
+        self._speak_async(text_vi, "manual_tts")
+        return {
+            "queued": True,
+            "text_vi": text_vi,
+            "voice": self.config["tts"]["voice"],
+            "tempo": self.config["tts"]["tempo"],
+        }
 
     def _warm_tts(self) -> None:
         try:
             self.tts.warm()
+            prime_cache = getattr(self.tts, "prime_cache", None)
+            if callable(prime_cache):
+                prime_cache(_TTS_FAST_PHRASES, self.outputs_dir / "tts")
         except Exception:
             # The health endpoint contains the concrete load error; safety and
             # scene processing intentionally remain alive.
