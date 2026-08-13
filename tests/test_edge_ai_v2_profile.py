@@ -54,7 +54,7 @@ def test_vlm_frame_is_resized_for_edge_inference() -> None:
 
 def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
-    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "/tts/stream", "AudioContext", "pcm_s16le_base64", "playbackRate.value=1.5", "currentTime+.35", "speechSynthesis", "pcSpeaker", "timing", "TTS tới cụm âm đầu", "Từ bấm hỏi → bắt đầu nghe", "RTF", "Detector realtime", "loa ALSA", "Qwen3.5 2B VL"):
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/stt/test/stop", "Speech-to-Text Lab", "Whisper STT", "audio_seconds", "real_time_factor", "/tts/speak", "/tts/stream", "AudioContext", "pcm_s16le_base64", "playbackRate.value=1.5", "currentTime+.35", "speechSynthesis", "pcSpeaker", "timing", "TTS tới cụm âm đầu", "Từ bấm hỏi → bắt đầu nghe", "RTF", "Detector realtime", "loa ALSA", "Qwen3.5 2B VL"):
         assert marker in text
 
 

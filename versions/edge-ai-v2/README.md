@@ -89,4 +89,9 @@ This is an assistive research prototype, not a certified navigation aid.
 
 Open `http://localhost:8090` after `adb forward tcp:8090 tcp:8090` for the
 full box demo. The page shows the QNN camera stream and its hold-to-talk button
+plus a dedicated **Speech-to-Text Lab**. Hold the STT Lab button to record the
+box microphone and run Whisper/VAD without invoking Qwen or TTS; the page shows
+the Vietnamese transcript, captured-audio duration, STT latency, RTF, sample
+rate, VAD state, and detector FPS. Full assistant turns include the same STT
+measurements in the end-to-end performance panel.
 drives box microphone → STT → VLM/router → TTS → box ALSA speaker.

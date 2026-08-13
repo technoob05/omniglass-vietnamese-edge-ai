@@ -10,6 +10,7 @@ from __future__ import annotations
 import collections
 import threading
 import time
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -457,22 +458,49 @@ class EyeOrchestrator:
         return {"recording": True, "path": str(path)}
 
     def stop_push_to_talk(self, speak_on_box: bool = True) -> dict[str, Any]:
-        path = self.recorder.stop()
         self._set_mode(SystemMode.TRANSCRIBING)
         try:
+            stt_result = self._stop_and_transcribe()
+            response = self.ask(stt_result["transcript_vi"], speak_on_box=speak_on_box)
+            return {"recording": False, **stt_result, "response": response}
+        finally:
+            self._restore_mode()
+
+    def stop_stt_test(self) -> dict[str, Any]:
+        """Finish recording and benchmark STT without invoking Qwen or TTS."""
+        self._set_mode(SystemMode.TRANSCRIBING)
+        try:
+            return {"recording": False, **self._stop_and_transcribe(), "stt_only": True}
+        finally:
+            self._restore_mode()
+
+    def _stop_and_transcribe(self) -> dict[str, Any]:
+        path = self.recorder.stop()
+        try:
+            with wave.open(str(path), "rb") as source:
+                audio_seconds = source.getnframes() / max(1, source.getframerate())
             with self._lock:
                 self._stats["stt_requests"] += 1
+            started = time.monotonic()
             text = self.stt.transcribe(path)
+            latency_ms = (time.monotonic() - started) * 1000.0
             if not text:
                 raise RuntimeError("No speech was recognized")
-            response = self.ask(text, speak_on_box=speak_on_box)
-            return {"recording": False, "transcript_vi": text, "response": response}
+            return {
+                "transcript_vi": text,
+                "stt": {
+                    "backend": "whisper_cli_cpu",
+                    "audio_seconds": round(audio_seconds, 3),
+                    "latency_ms": round(latency_ms, 1),
+                    "real_time_factor": round(latency_ms / 1000.0 / max(audio_seconds, 0.001), 3),
+                    "vad_enabled": bool(self.config["stt"].get("vad_enabled", False)),
+                    "sample_rate_hz": 16000,
+                },
+            }
         except Exception:
             with self._lock:
                 self._stats["stt_failures"] += 1
             raise
-        finally:
-            self._restore_mode()
 
     def reset_demo(self) -> dict[str, Any]:
         self.recorder.abort()
