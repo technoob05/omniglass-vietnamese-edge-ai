@@ -17,7 +17,7 @@ def test_qwen35_profile_is_complete_and_local() -> None:
     assert config["stt"]["backend"] == "whisper_cli_cpu"
     assert config["tts"]["backend"] == "vieneu_onnx"
     assert config["tts"]["voice"] == "Phạm Tuyên"
-    assert config["tts"]["tempo"] == 1.25
+    assert config["tts"]["tempo"] == 1.5
     assert config["audio"]["half_duplex"] is True
 
 
@@ -54,7 +54,7 @@ def test_vlm_frame_is_resized_for_edge_inference() -> None:
 
 def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
-    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "/tts/stream", "AudioContext", "pcm_s16le_base64", "playbackRate.value=.9", "currentTime+.35", "speechSynthesis", "pcSpeaker", "loa ALSA", "Qwen3.5 2B VL"):
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "/tts/stream", "AudioContext", "pcm_s16le_base64", "playbackRate.value=1.5", "currentTime+.35", "speechSynthesis", "pcSpeaker", "loa ALSA", "Qwen3.5 2B VL"):
         assert marker in text
 
 
