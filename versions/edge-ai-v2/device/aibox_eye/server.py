@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,10 +20,13 @@ const talk=document.getElementById('talk'),state=document.getElementById('state'
 async function json(url,opt){const r=await fetch(url,opt);const j=await r.json();if(!r.ok)throw Error(j.error||j.detail||'request failed');return j}
 async function health(){try{const h=await json('/health');const t=h.resources?.npu_temperature_c;state.textContent=`${h.mode} · camera=${h.scene?.camera_ok?'OK':'OFF'} · detector=${Number(h.resources?.detector_fps||0).toFixed(1)} FPS · NPU=${Number(t||0).toFixed(1)}°C · VLM=${h.components?.vlm?.admitted?'sẵn sàng':'đang làm mát (câu hỏi sẽ xếp hàng)'}`;telemetry.textContent=JSON.stringify({scene:h.scene,resources:h.resources,components:h.components},null,2)}catch(e){state.textContent='Lỗi health: '+e.message}}
 async function start(){if(recording||busy)return;try{await json('/push-to-talk/start',{method:'POST'});recording=true;talk.classList.add('active');talk.textContent='Đang nghe… thả để xử lý';state.textContent='Đang ghi âm microphone trên box…'}catch(e){state.textContent='Không bắt đầu được: '+e.message}}
-function pcSpeak(text){if(!('speechSynthesis'in window)||!text)return false;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='vi-VN';u.rate=.95;u.pitch=1;const voices=window.speechSynthesis.getVoices();u.voice=voices.find(v=>/^vi([-_]|$)/i.test(v.lang))||voices.find(v=>/vietnam/i.test(v.name))||null;u.onstart=()=>state.textContent='Đang đọc phản hồi bằng loa máy tính…';u.onerror=e=>state.textContent='Loa máy tính lỗi: '+e.error;window.speechSynthesis.speak(u);return true}
-function showTurn(j){const r=j.response||j,text=r.answer_vi||r.error||'—';answer.textContent=text;facts.textContent=JSON.stringify({source:r.source,thermal_wait_ms:r.thermal_wait_ms,first_token_ms:r.first_token_ms,vlm_latency_ms:r.latency_ms,early_tts_text:r.early_tts_text,frame:r.vlm_input,yolo_depth_scene_facts:r.scene_facts,guard:r.resource_guard},null,2);if(document.getElementById('pcSpeaker').checked)pcSpeak(text);else state.textContent=r.source==='vlm'?`VLM thật · token đầu ${Number(r.first_token_ms||0).toFixed(0)} ms · hoàn tất ${Number(r.latency_ms||0).toFixed(0)} ms · VieNeu trên box`:'Đã xử lý · TTS trên box'}
-async function stop(){if(!recording)return;recording=false;talk.classList.remove('active');talk.textContent='Đang xử lý…';busy=true;try{const j=await json('/push-to-talk/stop',{method:'POST'});transcript.textContent=j.transcript_vi||'—';showTurn(j)}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false;talk.textContent='Nhấn giữ để nói'}}
-async function ask(){const q=document.getElementById('q').value.trim();if(!q||busy)return;busy=true;state.textContent='Đang giữ YOLO/depth realtime và chờ khe HTP cho Qwen…';try{const j=await json('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:q})});transcript.textContent=q;showTurn(j)}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false}}
+let pcAudioContext=null,pcNextTime=0,pcTtsController=null;
+function pcSpeakSystem(text){if(!('speechSynthesis'in window)||!text)return false;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='vi-VN';u.rate=.95;const voices=window.speechSynthesis.getVoices();u.voice=voices.find(v=>/^vi([-_]|$)/i.test(v.lang))||voices.find(v=>/vietnam/i.test(v.name))||null;window.speechSynthesis.speak(u);return true}
+function schedulePcm(base64Pcm,sampleRate){const raw=atob(base64Pcm),pcm=new Int16Array(raw.length/2);for(let i=0;i<pcm.length;i++)pcm[i]=(raw.charCodeAt(i*2)|(raw.charCodeAt(i*2+1)<<8))<<16>>16;const audio=pcAudioContext.createBuffer(1,pcm.length,sampleRate),out=audio.getChannelData(0);for(let i=0;i<pcm.length;i++)out[i]=pcm[i]/32768;const source=pcAudioContext.createBufferSource();source.buffer=audio;source.playbackRate.value=.9;source.connect(pcAudioContext.destination);const at=Math.max(pcAudioContext.currentTime+.04,pcNextTime);source.start(at);pcNextTime=at+audio.duration/.9}
+async function pcSpeak(text){if(!text)return false;try{pcTtsController?.abort();pcTtsController=new AbortController();pcAudioContext=pcAudioContext||new AudioContext({sampleRate:48000});await pcAudioContext.resume();pcNextTime=pcAudioContext.currentTime+.35;const response=await fetch('/tts/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:pcTtsController.signal});if(!response.ok||!response.body)throw Error('VieNeu HTTP '+response.status);const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';state.textContent='VieNeu tiếng Việt đang truyền âm thanh về loa máy tính…';while(true){const {value,done}=await reader.read();pending+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=pending.split('\n');pending=lines.pop()||'';for(const line of lines){if(!line.trim())continue;const event=JSON.parse(line);if(event.type==='audio')schedulePcm(event.pcm_s16le_base64,event.sample_rate);if(event.type==='error')throw Error(event.message)}if(done)break}return true}catch(e){if(e.name==='AbortError')return false;state.textContent='VieNeu stream lỗi, dùng giọng Việt hệ thống: '+e.message;return pcSpeakSystem(text)}}
+function showTurn(j){const r=j.response||j,text=r.answer_vi||r.error||'—';answer.textContent=text;facts.textContent=JSON.stringify({source:r.source,thermal_wait_ms:r.thermal_wait_ms,first_token_ms:r.first_token_ms,vlm_latency_ms:r.latency_ms,early_tts_text:r.early_tts_text,frame:r.vlm_input,yolo_depth_scene_facts:r.scene_facts,guard:r.resource_guard},null,2);if(document.getElementById('pcSpeaker').checked)void pcSpeak(text);else state.textContent=r.source==='vlm'?`VLM thật · token đầu ${Number(r.first_token_ms||0).toFixed(0)} ms · hoàn tất ${Number(r.latency_ms||0).toFixed(0)} ms · VieNeu trên box`:'Đã xử lý · TTS trên box'}
+async function stop(){if(!recording)return;recording=false;talk.classList.remove('active');talk.textContent='Đang xử lý…';busy=true;try{const speak_on_box=!document.getElementById('pcSpeaker').checked;const j=await json('/push-to-talk/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({speak_on_box})});transcript.textContent=j.transcript_vi||'—';showTurn(j)}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false;talk.textContent='Nhấn giữ để nói'}}
+async function ask(){const q=document.getElementById('q').value.trim();if(!q||busy)return;busy=true;state.textContent='Đang giữ YOLO/depth realtime và chờ khe HTP cho Qwen…';try{const speak_on_box=!document.getElementById('pcSpeaker').checked;const j=await json('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:q,speak_on_box})});transcript.textContent=q;showTurn(j)}catch(e){state.textContent='Pipeline lỗi: '+e.message}finally{busy=false}}
 async function speak(){const shown=answer.textContent.trim(),typed=document.getElementById('q').value.trim(),text=shown&&shown!=='—'?shown:typed;if(!text)return;try{const j=await json('/tts/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});state.textContent=`Đã xếp VieNeu · giọng ${j.voice} · tốc độ ${j.tempo}x · loa ALSA`}catch(e){state.textContent='TTS lỗi: '+e.message}}
 talk.addEventListener('pointerdown',e=>{e.preventDefault();start()});talk.addEventListener('pointerup',e=>{e.preventDefault();stop()});talk.addEventListener('pointerleave',()=>{if(recording)stop()});document.getElementById('ask').onclick=ask;document.getElementById('speak').onclick=speak;document.getElementById('testPc').onclick=()=>pcSpeak('Loa máy tính đã hoạt động. Tôi sẵn sàng hỗ trợ bạn.');window.speechSynthesis?.getVoices();setInterval(health,2000);health();
 </script></html>'''.encode("utf-8")
@@ -68,20 +72,59 @@ def handler_factory(app: EyeOrchestrator) -> type[BaseHTTPRequestHandler]:
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
             try:
-                if parsed.path == "/ask": self._ask(str(self._read_json_body().get("text", ""))); return
+                if parsed.path == "/ask":
+                    body = self._read_json_body()
+                    self._ask(str(body.get("text", "")), body.get("speak_on_box", True) is not False)
+                    return
                 if parsed.path == "/push-to-talk/start": self.send_json(app.start_push_to_talk()); return
-                if parsed.path == "/push-to-talk/stop": self.send_json(app.stop_push_to_talk()); return
+                if parsed.path == "/push-to-talk/stop":
+                    body = self._read_optional_json_body()
+                    self.send_json(app.stop_push_to_talk(body.get("speak_on_box", True) is not False))
+                    return
                 if parsed.path == "/tts/speak": self.send_json(app.speak_text(str(self._read_json_body().get("text", "")))); return
+                if parsed.path == "/tts/stream": self._tts_stream(str(self._read_json_body().get("text", ""))); return
                 if parsed.path == "/demo/reset": self.send_json(app.reset_demo()); return
                 self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             except ValueError as error: self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
             except RuntimeError as error: self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
             except Exception as error: self.send_json({"error": f"internal error: {error}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
-        def _ask(self, text: str) -> None:
-            try: self.send_json(app.ask(text))
+        def _ask(self, text: str, speak_on_box: bool = True) -> None:
+            try: self.send_json(app.ask(text, speak_on_box=speak_on_box))
             except ValueError as error: self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
             except RuntimeError as error: self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
+
+        def _tts_stream(self, text: str) -> None:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            started = False
+            try:
+                for sequence, pcm in enumerate(app.stream_tts(text)):
+                    event = {
+                        "type": "audio", "seq": sequence, "sample_rate": 48000,
+                        "pcm_s16le_base64": base64.b64encode(pcm).decode("ascii"),
+                    }
+                    self.wfile.write((json.dumps(event, separators=(",", ":")) + "\n").encode("utf-8"))
+                    self.wfile.flush()
+                    started = True
+                if not started:
+                    raise RuntimeError("VieNeu returned no streaming audio")
+                self.wfile.write(b'{"type":"done"}\n')
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            except Exception as error:
+                event = {"type": "error", "message": str(error)}
+                try:
+                    self.wfile.write((json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8"))
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+            finally:
+                self.close_connection = True
 
         def _read_json_body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length", "0"))
@@ -89,6 +132,11 @@ def handler_factory(app: EyeOrchestrator) -> type[BaseHTTPRequestHandler]:
             value = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(value, dict): raise ValueError("JSON body must be an object")
             return value
+
+        def _read_optional_json_body(self) -> dict[str, Any]:
+            if int(self.headers.get("Content-Length", "0")) == 0:
+                return {}
+            return self._read_json_body()
 
     return Handler
 

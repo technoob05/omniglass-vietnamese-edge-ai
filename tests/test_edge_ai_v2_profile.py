@@ -16,6 +16,7 @@ def test_qwen35_profile_is_complete_and_local() -> None:
     assert config["vlm"]["stream"] is True
     assert config["stt"]["backend"] == "whisper_cli_cpu"
     assert config["tts"]["backend"] == "vieneu_onnx"
+    assert config["tts"]["voice"] == "Phạm Tuyên"
     assert config["tts"]["tempo"] == 1.25
     assert config["audio"]["half_duplex"] is True
 
@@ -53,7 +54,7 @@ def test_vlm_frame_is_resized_for_edge_inference() -> None:
 
 def test_full_demo_contains_box_camera_and_hold_to_talk_pipeline() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "server.py").read_text(encoding="utf-8")
-    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "speechSynthesis", "pcSpeaker", "loa ALSA", "Qwen3.5 2B VL"):
+    for marker in ("stream.mjpg", "/push-to-talk/start", "/push-to-talk/stop", "/tts/speak", "/tts/stream", "AudioContext", "pcm_s16le_base64", "playbackRate.value=.9", "currentTime+.35", "speechSynthesis", "pcSpeaker", "loa ALSA", "Qwen3.5 2B VL"):
         assert marker in text
 
 
@@ -123,3 +124,32 @@ def test_tts_cache_key_includes_voice_tempo_and_normalized_text() -> None:
     text = (ROOT / "versions" / "edge-ai-v2" / "device" / "aibox_eye" / "tts.py").read_text(encoding="utf-8")
     for marker in ("tts-cache", "cache_hits", "cache_misses", "self.config['voice']", "self.config['tempo']"):
         assert marker in text
+
+
+def test_vieneu_phrase_stream_is_pcm16_at_48khz() -> None:
+    import sys
+    import threading
+    import numpy as np
+    sys.path.insert(0, str(ROOT / "versions" / "edge-ai-v2" / "device"))
+    from aibox_eye.tts import VieneuTtsBackend
+
+    class FakeEngine:
+        sample_rate = 48_000
+
+        def infer(self, text, voice, style, temperature, top_k, apply_watermark):
+            assert text == "Xin chào."
+            assert voice == "Phạm Tuyên"
+            assert style == "tu_nhien"
+            assert temperature == 0.4
+            assert top_k == 25
+            assert apply_watermark is True
+            return np.asarray([-1.0, 0.0, 1.0], dtype=np.float32)
+
+    backend = object.__new__(VieneuTtsBackend)
+    backend.config = {"voice": "Phạm Tuyên"}
+    backend._engine = FakeEngine()
+    backend._engine_lock = threading.RLock()
+    chunks = list(backend.stream_pcm("Xin chào."))
+    assert len(chunks) == 1
+    values = np.frombuffer(chunks[0], dtype="<i2")
+    assert values.tolist() == [-32767, 0, 32767]

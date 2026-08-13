@@ -260,7 +260,7 @@ class EyeOrchestrator:
             lines.append(f"aibox_eye_{name}_total {stats[name]}")
         return "\n".join(lines) + "\n"
 
-    def ask(self, question_vi: str) -> dict[str, Any]:
+    def ask(self, question_vi: str, speak_on_box: bool = True) -> dict[str, Any]:
         question_vi = question_vi.strip()
         if not question_vi or len(question_vi) > 500:
             raise ValueError("text must contain 1..500 characters")
@@ -274,22 +274,27 @@ class EyeOrchestrator:
         if not intent.requires_vlm:
             response = answer(intent, scene)
             self._remember(question_vi, response)
-            self._speak_async(response, "deterministic_answer")
+            if speak_on_box:
+                self._speak_async(response, "deterministic_answer")
             self._restore_mode()
-            return {"intent": intent.name, "answer_vi": response, "source": "scene", "queued_tts": True}
-        return self._ask_vlm(question_vi, intent.name, scene)
+            return {"intent": intent.name, "answer_vi": response, "source": "scene", "queued_tts": speak_on_box}
+        return self._ask_vlm(question_vi, intent.name, scene, speak_on_box)
 
-    def _ask_vlm(self, question_vi: str, intent_name: str, scene: SceneSnapshot) -> dict[str, Any]:
+    def _ask_vlm(
+        self, question_vi: str, intent_name: str, scene: SceneSnapshot, speak_on_box: bool
+    ) -> dict[str, Any]:
         if self.vlm is None:
             response = "Mô tả chi tiết theo ảnh chưa được cài hoặc benchmark trên thiết bị này."
-            self._speak_async(response, "vlm_unavailable")
+            if speak_on_box:
+                self._speak_async(response, "vlm_unavailable")
             self._restore_mode()
-            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True}
+            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": speak_on_box}
         if not self._vlm_lock.acquire(blocking=False):
             response = "Mình đang xử lý một câu hỏi theo ảnh khác. Bạn hãy chờ câu trả lời đó xong."
-            self._speak_async(response, "vlm_busy")
+            if speak_on_box:
+                self._speak_async(response, "vlm_busy")
             self._restore_mode()
-            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True}
+            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": speak_on_box}
         wait_started = time.monotonic()
         wait_limit = float(self.config["vlm"]["admission_wait_seconds"])
         poll_seconds = float(self.config["vlm"]["admission_poll_seconds"])
@@ -311,12 +316,13 @@ class EyeOrchestrator:
                     break
                 if waited_seconds >= wait_limit:
                     response = "Qwen đang làm mát. " + detection_summary(scene)
-                    self._speak_async(response, "vlm_resource_guard")
+                    if speak_on_box:
+                        self._speak_async(response, "vlm_resource_guard")
                     return {
                         "intent": intent_name,
                         "answer_vi": response,
                         "source": "scene_fallback",
-                        "queued_tts": True,
+                        "queued_tts": speak_on_box,
                         "resource_guard": reasons,
                         "thermal_wait_ms": round(waited_seconds * 1000.0, 1),
                         "scene_facts": scene_facts(scene),
@@ -333,9 +339,10 @@ class EyeOrchestrator:
             accepted, score = accepts_for_vlm(jpeg)
             if not accepted:
                 response = "Ảnh hiện mờ hoặc phơi sáng kém, mình chưa thể mô tả đáng tin cậy."
-                self._speak_async(response, "vlm_bad_frame")
+                if speak_on_box:
+                    self._speak_async(response, "vlm_bad_frame")
                 return {
-                    "intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True,
+                    "intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": speak_on_box,
                     "keyframe": {"sharpness": round(score.sharpness, 2), "score": round(score.score, 3)},
                 }
             jpeg, frame_input = prepare_for_vlm(
@@ -353,7 +360,7 @@ class EyeOrchestrator:
                 if early_spoken:
                     return
                 prefix = _speakable_prefix(text, int(self.config["vlm"]["early_tts_min_words"]))
-                if prefix:
+                if prefix and speak_on_box:
                     early_spoken.append(prefix)
                     self._speak_async(prefix, "vlm_stream_first_phrase")
 
@@ -361,11 +368,11 @@ class EyeOrchestrator:
             response = result.answer_vi
             spoken_prefix = early_spoken[0] if early_spoken else ""
             remainder = response[len(spoken_prefix):].strip(" ,;:-") if response.startswith(spoken_prefix) else response
-            if remainder:
+            if remainder and speak_on_box:
                 self._speak_async(remainder, "vlm_answer_remainder" if spoken_prefix else "vlm_answer")
             self._remember(question_vi, response)
             return {
-                "intent": intent_name, "answer_vi": response, "source": "vlm", "queued_tts": True,
+                "intent": intent_name, "answer_vi": response, "source": "vlm", "queued_tts": speak_on_box,
                 "confidence": result.confidence, "uncertain": result.uncertain,
                 "evidence": result.evidence, "latency_ms": round(result.latency_ms, 1),
                 "first_token_ms": None if result.first_token_ms is None else round(result.first_token_ms, 1),
@@ -378,8 +385,9 @@ class EyeOrchestrator:
             with self._lock:
                 self._stats["vlm_failures"] += 1
             response = "Mô-đun mô tả ảnh hiện không phản hồi. Bạn có thể hỏi về vật thể đang phát hiện."
-            self._speak_async(response, "vlm_error")
-            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": True, "error": str(error)}
+            if speak_on_box:
+                self._speak_async(response, "vlm_error")
+            return {"intent": intent_name, "answer_vi": response, "source": "fallback", "queued_tts": speak_on_box, "error": str(error)}
         finally:
             self._vlm_lock.release()
             self._restore_mode()
@@ -420,6 +428,14 @@ class EyeOrchestrator:
             "tempo": self.config["tts"]["tempo"],
         }
 
+    def stream_tts(self, text_vi: str) -> Any:
+        text_vi = " ".join(text_vi.strip().split())
+        if not text_vi or len(text_vi) > 300:
+            raise ValueError("text must contain 1..300 characters")
+        with self._lock:
+            self._stats["tts_requests"] += 1
+        return self.tts.stream_pcm(text_vi)
+
     def _warm_tts(self) -> None:
         try:
             self.tts.warm()
@@ -440,7 +456,7 @@ class EyeOrchestrator:
         self._set_mode(SystemMode.LISTENING)
         return {"recording": True, "path": str(path)}
 
-    def stop_push_to_talk(self) -> dict[str, Any]:
+    def stop_push_to_talk(self, speak_on_box: bool = True) -> dict[str, Any]:
         path = self.recorder.stop()
         self._set_mode(SystemMode.TRANSCRIBING)
         try:
@@ -449,7 +465,7 @@ class EyeOrchestrator:
             text = self.stt.transcribe(path)
             if not text:
                 raise RuntimeError("No speech was recognized")
-            response = self.ask(text)
+            response = self.ask(text, speak_on_box=speak_on_box)
             return {"recording": False, "transcript_vi": text, "response": response}
         except Exception:
             with self._lock:

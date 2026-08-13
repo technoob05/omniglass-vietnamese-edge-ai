@@ -36,9 +36,9 @@
   },
   "tts": {
     "backend": "vieneu_onnx",
-    "voice": "Thái Sơn",
+    "voice": "Phạm Tuyên",
     "tempo": 1.25,
-    "threads": 3,
+    "threads": 4,
     "model_dir": "models/vieneu"
   },
   "vlm": {

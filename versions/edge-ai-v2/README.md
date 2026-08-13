@@ -52,11 +52,13 @@ ALSA queue in 139 ms; a new dynamic sentence reached it in 3.77 s before being
 cached for later turns.
 
 For development from a PC, the web UI enables **loa máy tính** by default. It
-passes the same `answer_vi` to the browser's Vietnamese Web Speech voice and
-therefore does not depend on the box's USB ALSA speaker being audible. Use the
-**Test loa máy tính** button once after opening the page if the browser requires
-a user gesture before speech playback. VieNeu on the box remains available as
-the deterministic offline fallback.
+posts the exact `answer_vi` to `POST /tts/stream`; the box decodes short VieNeu
+phrases and sends 48 kHz PCM16 NDJSON to the browser's Web Audio API. Phrase
+streaming is the QCS8550 mode that passed Vietnamese Whisper loopback; native
+ONNX frame streaming remains unqualified. This keeps the selected voice even when Windows
+has no Vietnamese system voice. Use **Test loa máy tính** once after opening
+the page to unlock browser audio. Web Speech is only a last-resort fallback if
+the neural stream fails; VieNeu/ALSA remains available directly on the box.
 
 On the connected QCS8550 box, the validated warm turn reached first VLM text
 in 4.12 s and completed VLM decoding in 8.31 s while QNN perception remained at
