@@ -22,8 +22,9 @@
     .safety-panel { grid-column:1/-1; padding:16px 18px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center; transition:.2s ease; }
     .safety-panel.warning { border-color:#8d6724; background:linear-gradient(90deg,rgba(86,56,10,.9),var(--panel)); }
     .safety-panel.danger { border-color:#b43749; background:linear-gradient(90deg,rgba(91,20,31,.94),var(--panel)); box-shadow:0 0 0 1px rgba(255,100,116,.2),0 18px 60px rgba(109,20,33,.28); }
+    .safety-panel.guidance { border-color:#226f80; background:linear-gradient(90deg,rgba(12,65,76,.9),var(--panel)); }
     .safety-icon { display:grid; place-items:center; width:48px; height:48px; border-radius:15px; background:#14271f; color:var(--mint); font-size:23px; }
-    .warning .safety-icon { color:var(--amber); background:#392b12; } .danger .safety-icon { color:#fff; background:#a72d40; }
+    .warning .safety-icon { color:var(--amber); background:#392b12; } .danger .safety-icon { color:#fff; background:#a72d40; } .guidance .safety-icon { color:#8ce7f2; background:#123a43; }
     .safety-kicker { color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.12em; text-transform:uppercase; }
     #safetyMessage { font-size:clamp(17px,2.3vw,23px); font-weight:850; margin-top:2px; }
     #safetyMeta { color:var(--muted); margin-top:3px; font-size:13px; }
@@ -79,7 +80,7 @@
   <section id="safetyPanel" class="safety-panel clear">
     <div id="safetyIcon" class="safety-icon">✓</div>
     <div><div class="safety-kicker" data-vi="Cảnh báo tức thời · không dùng VLM" data-en="Immediate alerts · no VLM call">Cảnh báo tức thời · không dùng VLM</div><div id="safetyMessage" aria-live="assertive">Đang chờ camera để kiểm tra vùng phía trước.</div><div id="safetyMeta">YOLO, depth advisory và tracking sẽ xử lý trước hội thoại.</div></div>
-    <label class="toggle"><input id="safetyAlerts" type="checkbox" checked><span data-vi="Đọc cảnh báo 1.5×" data-en="Speak alerts at 1.5×">Đọc cảnh báo 1.5×</span></label>
+    <div><label class="toggle"><input id="safetyAlerts" type="checkbox" checked><span data-vi="Bật cảnh báo tự động" data-en="Automatic spoken alerts">Bật cảnh báo tự động</span></label><label class="toggle"><input id="assistiveGuidance" type="checkbox" checked><span data-vi="Gợi ý mốc và lối thoáng" data-en="Landmark and open-side hints">Gợi ý mốc và lối thoáng</span></label><label class="toggle"><input id="speakDistance" type="checkbox" checked><span data-vi="Luôn nói khoảng cách" data-en="Always speak distance">Luôn nói khoảng cách</span></label></div>
   </section>
   <section class="camera">
     <video id="camera" autoplay muted playsinline></video><canvas id="boxes"></canvas>
@@ -89,7 +90,7 @@
   <section class="conversation-wrap">
     <div class="section-head"><h2 id="conversationTitle">Hội thoại theo ngữ cảnh</h2><span id="workflowBadge" class="tiny-badge">Auto · VLM chính</span></div>
     <div class="samples"><button class="sample" data-prompt-vi="Xung quanh tôi có gì?" data-prompt-en="What is around me?">Xung quanh</button><button class="sample" data-prompt-vi="Mô tả tình hình qua đường phía trước và các nguy cơ bạn thấy." data-prompt-en="Describe the crossing ahead and any risks you can see.">Qua đường</button><button class="sample" data-prompt-vi="Vật cản gần nhất cách khoảng bao nhiêu mét?" data-prompt-en="Approximately how far is the nearest obstacle?">Khoảng cách</button></div>
-    <div id="conversation" class="conversation"><div id="introMessage" class="message system" data-vi="Rule engine chỉ cảnh báo nền. Mọi câu hỏi về cảnh vật, khoảng cách hoặc giao thông được chuyển tới VLM với nhiều frame, YOLO, depth và visual memory." data-en="The rule engine only provides background alerts. Scene, distance, and traffic questions go to the VLM with multiple frames, YOLO, depth, and visual memory.">Rule engine chỉ cảnh báo nền. Mọi câu hỏi về cảnh vật, khoảng cách hoặc giao thông được chuyển tới VLM với nhiều frame, YOLO, depth và visual memory.</div></div>
+    <div id="conversation" class="conversation"><div id="introMessage" class="message system" data-vi="Mỗi câu hỏi dùng một frame camera mới. YOLO, depth và visual memory cung cấp ngữ cảnh có cấu trúc; câu trả lời hình ảnh cũ không được tái sử dụng." data-en="Every question uses a fresh camera frame. YOLO, depth, and visual memory provide structured context; previous visual answers are never reused.">Mỗi câu hỏi dùng một frame camera mới. YOLO, depth và visual memory cung cấp ngữ cảnh có cấu trúc; câu trả lời hình ảnh cũ không được tái sử dụng.</div></div>
   </section>
   <section class="perception">
     <div>
@@ -101,18 +102,19 @@
         <div class="metric"><span data-vi="Bộ nhớ thị giác" data-en="Visual memory">Bộ nhớ thị giác</span><strong id="memoryCount">0</strong></div>
       </div>
       <div id="perceptionStatus" class="metricline">Đang kiểm tra detector…</div>
-      <div class="controls"><label><span data-vi="Theo dõi" data-en="Track">Theo dõi</span> <input id="watchTarget" type="text" placeholder="person, bottle, laptop…"></label><button id="resetMemory" class="secondary" type="button" data-vi="Xóa bộ nhớ thị giác" data-en="Clear visual memory">Xóa bộ nhớ thị giác</button></div>
+      <div class="controls"><label><span data-vi="Theo dõi" data-en="Track">Theo dõi</span> <input id="watchTarget" type="text" placeholder="person, bottle, laptop…"></label><button id="resetMemory" class="secondary" type="button" data-vi="Xóa bộ nhớ thị giác" data-en="Clear visual memory">Xóa bộ nhớ thị giác</button><button id="clearConversation" class="secondary" type="button" data-vi="Xóa hội thoại" data-en="Clear conversation">Xóa hội thoại</button></div>
     </div>
-    <div><h2 data-vi="Bộ nhớ vật thể / lần thấy gần nhất" data-en="Object memory / last seen">Bộ nhớ vật thể / lần thấy gần nhất</h2><div id="memory" class="memory"><div class="memory-item">Chưa có observation.</div></div></div>
+    <div><h2 data-vi="Bộ nhớ vật thể · đang tắt" data-en="Object memory · disabled">Bộ nhớ vật thể · đang tắt</h2><div id="memory" class="memory"><div class="memory-item" data-vi="Đã tắt lịch sử vật thể để ưu tiên phản hồi realtime." data-en="Historical object memory is disabled to prioritize realtime response.">Đã tắt lịch sử vật thể để ưu tiên phản hồi realtime.</div></div></div>
   </section>
   <footer>
     <button id="start" data-vi="Bắt đầu trợ lý" data-en="Start assistant">Bắt đầu trợ lý</button><button id="stop" class="stop" disabled data-vi="Dừng" data-en="Stop">Dừng</button><button id="pushToTalk" class="secondary" type="button" disabled data-vi="Giữ để nói" data-en="Hold to talk">Giữ để nói</button>
+    <label class="voice"><span data-vi="Camera" data-en="Camera">Camera</span> <select id="cameraSource" aria-label="Camera"><option value="">Tự động chọn camera ngoài</option></select></label>
     <label class="voice"><span data-vi="Ngôn ngữ" data-en="Language">Ngôn ngữ</span> <select id="language" aria-label="Language"><option value="vi" selected>Tiếng Việt</option><option value="en">English</option></select></label>
     <label class="voice"><span data-vi="Workflow" data-en="Workflow">Workflow</span> <select id="workflow" aria-label="OpenGlass workflow"><option value="auto" data-vi="Tự động · đủ kỹ năng" data-en="Auto · all skills">Tự động · đủ kỹ năng</option><option value="find_object" data-vi="Tìm đồ vật" data-en="Find object">Tìm đồ vật</option><option value="read_text" data-vi="Đọc chữ" data-en="Read text">Đọc chữ</option><option value="indoor_direction" data-vi="Chỉ đường trong nhà" data-en="Indoor guidance">Chỉ đường trong nhà</option><option value="sound_watch" data-vi="Theo dõi âm thanh · thử nghiệm" data-en="Sound watch · experimental">Theo dõi âm thanh · thử nghiệm</option><option value="describe_scene" data-vi="Mô tả cảnh" data-en="Describe scene">Mô tả cảnh</option></select></label>
     <label class="voice"><span data-vi="Giọng" data-en="Voice">Giọng</span> <select id="voice" aria-label="Giọng tiếng Việt"><option value="Trúc Ly" selected>Trúc Ly · Nữ Bắc</option><option value="Ngọc Trân">Ngọc Trân · Nữ Trung</option><option value="Xuân Vĩnh">Xuân Vĩnh · Nam Nam</option><option value="Phạm Tuyên">Phạm Tuyên · Nam Bắc</option></select></label>
     <span id="ttsBadge" class="tiny-badge">TTS 1.5×</span><div id="partial"></div>
   </footer>
 </main>
-<script type="module" src="/static/vi/vi-chat.js?v=8-echo-safe-ptt"></script>
+<script type="module" src="/static/vi/vi-chat.js?v=19-performance-rollback"></script>
 </body>
 </html>

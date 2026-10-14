@@ -215,9 +215,9 @@ def ordering_and_fallback(context: Any) -> dict[str, Any]:
         "sentence_requests_exact_once": [item["text"] for item in first_stream] == [
             "Phía trước có một chiếc ghế.", "Bên trái là cửa ra vào."
         ],
-        "fifo_waits_for_prior_playback": first_stream[1]["at"] - first_stream[0]["at"] >= 500,
+        "sentence_streams_fifo": first_stream[1]["at"] > first_stream[0]["at"],
         "answer_committed_once": first["assistantMessages"] == ["Phía trước có một chiếc ghế. Bên trái là cửa ra vào."],
-        "history_committed_once": len(first["history"]) == 2,
+        "visual_history_not_reused": first["history"] == [],
         "turn_drained_and_listening": first["state"] == "listening" and first["sources"] == 0 and first["abortNull"],
     }
 
@@ -305,7 +305,9 @@ def cancellation(context: Any, action: str) -> dict[str, Any]:
     )
     checks = {
         "epoch_invalidated": after["turn"] == before["turn"] + 1 and (action == "barge" or after["run"] == before["run"] + 1),
-        "active_and_queue_cancelled": [item["text"] for item in after["fetches"]] == ["Câu cũ thứ nhất."],
+        "prefetched_audio_cancelled": [item["text"] for item in after["fetches"]] in (
+            ["Câu cũ thứ nhất."], ["Câu cũ thứ nhất.", "Câu cũ thứ hai."]
+        ),
         "speech_resources_cancelled": after["sources"] == 0 and after["abortNull"] and after["earlyNull"] and after["audioNull"] and after["chatNull"],
         "late_old_response_not_committed": not after["assistantMessages"] and not after["history"],
         "final_state": after["state"] == ("listening" if action == "barge" else "stopped"),
@@ -320,7 +322,11 @@ def cancellation(context: Any, action: str) -> dict[str, Any]:
             """() => ({state:window.__omniglassViAssistant.state, fetches:window.__ttsFetches.map(x=>x.text),
               answers:Array.from(document.querySelectorAll('.message.assistant')).map(x=>x.textContent)})"""
         )
-        checks["next_turn_is_heard"] = resumed["state"] == "listening" and resumed["fetches"] == ["Câu cũ thứ nhất.", "Câu mới hợp lệ."] and resumed["answers"] == ["Câu mới hợp lệ."]
+        checks["next_turn_is_heard"] = (
+            resumed["state"] == "listening"
+            and resumed["fetches"][-1:] == ["Câu mới hợp lệ."]
+            and resumed["answers"] == ["Câu mới hợp lệ."]
+        )
     screenshot = RESULT_DIR / f"{action}_cancel.png"
     page.screenshot(path=str(screenshot), full_page=True)
     page.close()
@@ -332,6 +338,7 @@ def clean_diagnostics(diagnostics: dict[str, list[Any]]) -> dict[str, list[Any]]
     diagnostics = {key: list(value) for key, value in diagnostics.items()}
     diagnostics["http"] = [item for item in diagnostics["http"] if not item["url"].endswith("/favicon.ico")]
     diagnostics["console"] = [item for item in diagnostics["console"] if "favicon.ico" not in item["text"] and "404" not in item["text"]]
+    diagnostics["requests"] = [item for item in diagnostics["requests"] if item.get("failure") != "net::ERR_ABORTED"]
     return diagnostics
 
 

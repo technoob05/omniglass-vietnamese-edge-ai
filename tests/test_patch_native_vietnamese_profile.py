@@ -61,11 +61,11 @@ def test_browser_profile_contract_and_javascript_syntax() -> None:
 
     # Frame freshness and bounded rolling text memory.
     created = source.index("type === 'session.created'")
-    capture = source.index("const frame = this.captureFrame();", created)
+    capture = source.index("const frame = this.captureFrame(512, 0.78);", created)
     send = source.index("type:'input.append'", capture)
     assert created < capture < send
-    assert "this.history.slice(-MAX_HISTORY_MESSAGES)" in source
-    assert "MAX_HISTORY_MESSAGES = 10" in source
+    assert "Never feed old visual answers back" in source
+    assert "this.history = [];" in source
 
     # At most one retry, and never after input has been sent.
     assert "attempt < 2" in source
@@ -90,7 +90,8 @@ def test_browser_profile_contract_and_javascript_syntax() -> None:
     assert "conversationOwnsAudio" in source
     assert "acquireConversationAudio()" in source
     assert "releaseConversationAudio(run)" in source
-    assert "this.visualFrames.slice(-3)" in source
+    assert "this.captureFrame(512, 0.78)" in source
+    assert "content:[{type:'image', data:frame}" in source
     assert "/api/perception/vi/query" not in source
     assert "language=${language}" in source
     assert "SYSTEM_PROMPTS" in source
@@ -101,6 +102,10 @@ def test_browser_profile_contract_and_javascript_syntax() -> None:
     assert "fetch('/api/tts/vi/stream'" in source
     assert "await this.speakMms(text, signal)" in source
     assert "echoCancellation:true" in source
+    assert "enumerateDevices()" in source
+    assert "deviceId:{exact:deviceId}" in source
+    assert "id=\"cameraSource\"" in (ASSETS / "vi-chat.html").read_text(encoding="utf-8")
+    assert "id=\"speakDistance\"" in (ASSETS / "vi-chat.html").read_text(encoding="utf-8")
 
     # /vi-only early speech: sentence buffering feeds a guarded FIFO chain
     # directly from text deltas, while full-answer speech remains flaggable.
@@ -187,10 +192,10 @@ assert.equal(classifyWorkflow('Mấy ngón tay?'), 'visual_qa');
 def test_profile_is_separate_from_native_omni_assets() -> None:
     html = (ASSETS / "vi-chat.html").read_text(encoding="utf-8")
     source = (ASSETS / "vi-chat.js").read_text(encoding="utf-8")
-    assert '/static/vi/vi-chat.js?v=8-echo-safe-ptt' in html
+    assert '/static/vi/vi-chat.js?v=19-performance-rollback' in html
     assert 'id="workflow"' in html
     assert 'id="pushToTalk"' in html
-    assert "Object memory / last seen" in html
+    assert "Object memory · disabled" in html
     assert "/api/perception/vi/frame" in source
     assert "perceptionContext()" in source
     assert 'value="Trúc Ly" selected' in html

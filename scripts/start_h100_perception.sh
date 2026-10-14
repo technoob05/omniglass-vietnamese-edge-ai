@@ -29,7 +29,8 @@ fi
 
 nohup "${PYTHON}" "${SOURCE}" \
   --host 127.0.0.1 --port "${PORT}" --model "${MODEL}" --device cuda:0 \
-  --depth-model "${DEPTH_MODEL}" --depth-every 5 --history-size 800 \
+  --depth-model "${DEPTH_MODEL}" --depth-every "${OPENGLASS_DEPTH_EVERY:-5}" \
+  --history-size "${OPENGLASS_HISTORY_SIZE:-0}" \
   >"${LOG_ROOT}/vi_perception.log" 2>&1 </dev/null &
 echo $! >"${pid_file}"
 

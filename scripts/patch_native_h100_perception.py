@@ -4,19 +4,43 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 
 MARKER = "# OPENGLASS_VI_PERCEPTION_PROXY_V1"
+LEGACY_FACE_MARKER = "# OPENGLASS_VI_FAMILIAR_FACE_PROXY_V1"
+LEGACY_FACE_ROUTES = (
+    ("post", "/api/perception/vi/faces/enroll", "vietnamese_perception_face_enroll"),
+    ("get", "/api/perception/vi/faces", "vietnamese_perception_faces_list"),
+    ("post", "/api/perception/vi/faces/delete", "vietnamese_perception_face_delete"),
+    ("post", "/api/perception/vi/faces/clear", "vietnamese_perception_faces_clear"),
+)
+
+
+def remove_legacy_face_routes(text: str) -> str:
+    cleaned = text.replace(LEGACY_FACE_MARKER + "\n", "")
+    for method, route, function_name in LEGACY_FACE_ROUTES:
+        pattern = re.compile(
+            rf'\n*@app\.{method}\("{re.escape(route)}"\)\n'
+            rf'async def {function_name}\([^\n]*\):\n'
+            rf'    return await _vi_perception_proxy\([^\n]+\)\n',
+        )
+        cleaned = pattern.sub("\n", cleaned)
+    return cleaned
 
 
 def patch_gateway(path: Path) -> bool:
     text = path.read_text(encoding="utf-8")
-    if MARKER in text:
-        return False
     anchor = '@app.get("/api/presets")\nasync def get_presets():'
     if text.count(anchor) != 1:
         raise RuntimeError(f"Expected one gateway anchor, found {text.count(anchor)}")
+    if MARKER in text:
+        cleaned = remove_legacy_face_routes(text)
+        if cleaned != text:
+            path.write_text(cleaned, encoding="utf-8")
+            return True
+        return False
     block = f'''{MARKER}
 async def _vi_perception_proxy(path: str, payload: dict | None = None):
     base = os.getenv("OPENGLASS_VI_PERCEPTION_URL", "http://127.0.0.1:18784")

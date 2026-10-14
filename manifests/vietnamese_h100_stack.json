@@ -88,11 +88,11 @@
   "source_artifacts": [
     {
       "path": "native-overrides/vi-profile/vi-chat.html",
-      "sha256": "4ac4a3ed7de009361b37cf7696099eca7f74f8feaf8bbd3eddb773b9311fcfa6"
+      "sha256": "fdedb59927c2bde37cea08b974a2da5e3df19c6d9f01bc4d7300ef320db00131"
     },
     {
       "path": "native-overrides/vi-profile/vi-chat.js",
-      "sha256": "1ca911261a771a60f5209bc20f908face9b58f175e3ea02839b66f8300949ff9"
+      "sha256": "786ba8a475457c2371d97f0fa4b8c537ecffb01e3f6dff2b2f5b45ac6a16a94a"
     },
     {
       "path": "scripts/phowhisper_asr_service.py",
@@ -100,7 +100,7 @@
     },
     {
       "path": "scripts/native_vieneu_tts_service.py",
-      "sha256": "ab7b6a1f8372ce2b71499051948617062e2b2e42cc141a9ad932a1d0df0b86e7"
+      "sha256": "289d92f716c9037c56ed4e28dcdea6b5eb420bd5d7f2394d5bfe1925112b6908"
     },
     {
       "path": "scripts/patch_native_vietnamese_profile.py",
@@ -112,15 +112,15 @@
     },
     {
       "path": "scripts/h100_perception_service.py",
-      "sha256": "12e4e33274f1396d1a0051b90e560e3d30a33300d055c06f0c569562f32e75bb"
+      "sha256": "5bdc314b7bc4b3437b31755f6b567a56b34e3833ce91501639930b56dea741cd"
     },
     {
       "path": "scripts/patch_native_h100_perception.py",
-      "sha256": "4a2b5a38d0d787f5a025620b51f7697ac649fd3c65576593826a585c5d86c291"
+      "sha256": "2e01b08ee6c0a831f813d9b5a0f40dcbc882673899656d5058fa219e205ab16f"
     },
     {
       "path": "scripts/start_h100_perception.sh",
-      "sha256": "6cfdae81d78c0bb7e02618ea04b594cf9f783f419b43ef645db80270cbf18d56"
+      "sha256": "93e9f7cbaad2c85d54658fa70232e84149362f487282d5063466e87a19cedca3"
     }
   ],
   "verified_results": {

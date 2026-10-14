@@ -30,18 +30,24 @@ VI_LABELS = {
     "cup": "cốc", "chair": "ghế", "couch": "ghế sofa", "dining table": "bàn",
     "tv": "màn hình", "laptop": "máy tính xách tay", "cell phone": "điện thoại",
     "book": "sách", "clock": "đồng hồ", "scissors": "kéo", "umbrella": "ô",
+    "toilet": "bồn cầu", "sink": "bồn rửa", "bed": "giường", "refrigerator": "tủ lạnh",
+    "microwave": "lò vi sóng", "oven": "lò nướng", "toaster": "máy nướng bánh",
 }
 ALIASES = {
     "người": "person", "xe đạp": "bicycle", "ô tô": "car", "xe máy": "motorcycle",
     "ba lô": "backpack", "balo": "backpack", "túi": "handbag", "chai": "bottle",
     "cốc": "cup", "ly": "cup", "ghế": "chair", "bàn": "dining table",
     "màn hình": "tv", "máy tính": "laptop", "điện thoại": "cell phone", "sách": "book",
+    "bồn cầu": "toilet", "nhà vệ sinh": "toilet", "bồn rửa": "sink", "lavabo": "sink",
+    "giường": "bed", "tủ lạnh": "refrigerator",
 }
 SAFETY_CLASSES = {
     "person", "bicycle", "car", "motorcycle", "bus", "truck", "backpack",
     "handbag", "suitcase", "bottle", "chair", "couch", "dining table",
 }
 DYNAMIC_CLASSES = {"person", "bicycle", "car", "motorcycle", "bus", "truck"}
+ASSISTIVE_LANDMARKS = {"toilet", "sink", "bed", "refrigerator", "microwave", "oven"}
+EN_LOCATIONS = {"bên trái": "on the left", "ở giữa": "in the center", "bên phải": "on the right"}
 
 
 def screen_zone(box: tuple[float, float, float, float], width: int) -> str:
@@ -97,26 +103,28 @@ def evaluate_safety(
         close = (depth is not None and depth <= (2.4 if item.label in DYNAMIC_CLASSES else 1.65)) or area >= 0.12 or (bottom >= 0.86 and area >= 0.075)
         if not corridor and area < 0.22:
             continue
+        distance_vi = f" Ước lượng khoảng {depth:.1f} mét." if depth is not None else ""
+        distance_en = f" Estimated distance: {depth:.1f} meters." if depth is not None else ""
         if very_close and corridor:
             severity, score = "danger", 3
-            message = f"Cẩn thận! {item.label_vi.capitalize()} rất gần {item.location}."
-            message_en = f"Caution! {item.label.capitalize()} is very close in the travel path."
+            message = f"Cẩn thận! {item.label_vi.capitalize()} rất gần {item.location}.{distance_vi}"
+            message_en = f"Caution! {item.label.capitalize()} is very close in the travel path.{distance_en}"
             rule = "center_path_very_close"
         elif close and corridor:
             severity, score = "warning", 2
             motion = " đang tiến lại gần" if approaching else " ở gần"
-            message = f"Chú ý, {item.label_vi}{motion} {item.location}."
-            message_en = f"Warning, {item.label} is {'approaching' if approaching else 'nearby'} in the travel path."
+            message = f"Chú ý, {item.label_vi}{motion} {item.location}.{distance_vi}"
+            message_en = f"Warning, {item.label} is {'approaching' if approaching else 'nearby'} in the travel path.{distance_en}"
             rule = "center_path_close"
         elif approaching and corridor:
             severity, score = "warning", 2
-            message = f"Chú ý, {item.label_vi} đang tiến lại gần {item.location}."
-            message_en = f"Warning, {item.label} is approaching in the travel path."
+            message = f"Chú ý, {item.label_vi} đang tiến lại gần {item.location}.{distance_vi}"
+            message_en = f"Warning, {item.label} is approaching in the travel path.{distance_en}"
             rule = "approaching"
         elif area >= 0.22:
             severity, score = "caution", 1
-            message = f"Có {item.label_vi} khá gần {item.location}."
-            message_en = f"There is a {item.label} fairly close {item.location}."
+            message = f"Có {item.label_vi} khá gần {item.location}.{distance_vi}"
+            message_en = f"There is a {item.label} fairly close {item.location}.{distance_en}"
             rule = "large_lateral_object"
         else:
             continue
@@ -146,6 +154,168 @@ def evaluate_safety(
     }, next_geometry
 
 
+def depth_sector_summary(depth: np.ndarray | None) -> dict[str, float | None]:
+    """Robust lower-field depth for coarse left/centre/right guidance."""
+    if depth is None or depth.ndim != 2:
+        return {"left": None, "center": None, "right": None}
+    height, width = depth.shape
+    y1, y2 = int(height * 0.38), int(height * 0.88)
+    sectors = {"left": (0.05, 0.32), "center": (0.36, 0.64), "right": (0.68, 0.95)}
+    result: dict[str, float | None] = {}
+    for name, (start, end) in sectors.items():
+        values = depth[y1:y2, int(width * start):int(width * end)]
+        values = values[np.isfinite(values) & (values > 0.05) & (values < 20)]
+        result[name] = round(float(np.median(values)), 2) if values.size >= 100 else None
+    return result
+
+
+def estimate_front_wall(
+    depth: np.ndarray | None,
+    detections: list[Observation],
+) -> dict[str, Any]:
+    """Estimate a broad front-facing planar surface directly from metric depth."""
+    empty = {
+        "distance_m_advisory": None, "wall_likely": False, "confidence": 0.0,
+        "valid_coverage": 0.0, "planar_inlier_ratio": 0.0,
+        "method": "metric_depth_broad_plane_v1",
+    }
+    if depth is None or depth.ndim != 2:
+        return empty
+
+    height, width = depth.shape
+    x1, x2 = int(width * 0.20), int(width * 0.80)
+    y1, y2 = int(height * 0.18), int(height * 0.72)
+    roi = depth[y1:y2, x1:x2].astype(np.float32, copy=False)
+    valid = np.isfinite(roi) & (roi > 0.10) & (roi < 12.0)
+    coverage = float(valid.mean()) if valid.size else 0.0
+    if coverage < 0.75 or int(valid.sum()) < 500:
+        return {**empty, "valid_coverage": round(coverage, 3)}
+
+    # A large recognised object in the measurement window is a strong reason
+    # not to call the broad surface behind it a wall.
+    occlusion = 0.0
+    for item in detections:
+        bx1, by1, bx2, by2 = item.bbox_norm
+        overlap_w = max(0.0, min(bx2, .80) - max(bx1, .20))
+        overlap_h = max(0.0, min(by2, .72) - max(by1, .18))
+        occlusion += overlap_w * overlap_h / (.60 * .54)
+
+    yy, xx = np.indices(roi.shape, dtype=np.float32)
+    sample = valid & ((yy.astype(np.int32) % 4 == 0) & (xx.astype(np.int32) % 4 == 0))
+    z = roi[sample]
+    xn = xx[sample] / max(roi.shape[1] - 1, 1) - 0.5
+    yn = yy[sample] / max(roi.shape[0] - 1, 1) - 0.5
+    design = np.column_stack((xn, yn, np.ones_like(xn)))
+    coefficients, *_ = np.linalg.lstsq(design, z, rcond=None)
+    residual = np.abs(z - design @ coefficients)
+    center_distance = float(coefficients[2])
+    tolerance = max(0.12, center_distance * 0.10)
+    inlier_ratio = float(np.mean(residual <= tolerance))
+    slope = float(np.hypot(coefficients[0], coefficients[1])) / max(center_distance, .1)
+    wall_likely = 0.35 <= center_distance <= 6.0 and inlier_ratio >= 0.78 and slope <= 1.0 and occlusion < 0.28
+    confidence = min(0.95, max(0.0, inlier_ratio * coverage * (1.0 - min(occlusion, 1.0))))
+    return {
+        "distance_m_advisory": round(center_distance, 2),
+        "wall_likely": bool(wall_likely),
+        "confidence": round(confidence, 3),
+        "valid_coverage": round(coverage, 3),
+        "planar_inlier_ratio": round(inlier_ratio, 3),
+        "relative_plane_slope": round(slope, 3),
+        "detector_occlusion_ratio": round(min(occlusion, 1.0), 3),
+        "method": "metric_depth_broad_plane_v1",
+    }
+
+
+def evaluate_surface_safety(
+    front_wall: dict[str, Any],
+    previous: tuple[float, int] | None,
+    now_ms: int,
+    last_alert_ms: dict[str, int],
+) -> tuple[dict[str, Any] | None, tuple[float, int] | None]:
+    distance = front_wall.get("distance_m_advisory")
+    if distance is None or not front_wall.get("wall_likely"):
+        return None, None
+    current = (float(distance), now_ms)
+    approaching = bool(previous and now_ms - previous[1] <= 2500 and previous[0] - distance >= 0.16)
+    if distance <= 0.75:
+        severity, score, cooldown_ms = "danger", 4, 2500
+        lead_vi = "Cẩn thận! Bạn đang tới rất gần tường phía trước" if approaching else "Cẩn thận! Tường ở ngay phía trước"
+        lead_en = "Caution! You are moving very close to the wall ahead" if approaching else "Caution! A wall is immediately ahead"
+    elif distance <= 1.45:
+        severity, score, cooldown_ms = "warning", 3, 5500
+        lead_vi = "Chú ý, bạn đang tới gần tường phía trước" if approaching else "Chú ý, có tường gần phía trước"
+        lead_en = "Warning, you are approaching the wall ahead" if approaching else "Warning, there is a wall close ahead"
+    else:
+        return None, current
+    key = f"{severity}:front_wall"
+    should_announce = now_ms - last_alert_ms.get(key, -cooldown_ms) >= cooldown_ms
+    if should_announce:
+        last_alert_ms[key] = now_ms
+    return {
+        "id": key, "severity": severity, "score": score, "rule": "front_wall_depth_plane",
+        "message_vi": f"{lead_vi}. Ước lượng khoảng {distance:.1f} mét.",
+        "message_en": f"{lead_en}. Estimated distance: {distance:.1f} meters.",
+        "label": "wall", "label_vi": "tường", "location": "ở giữa", "track_id": None,
+        "confidence": front_wall.get("confidence", 0.0), "depth_m_advisory": distance,
+        "area_ratio": front_wall.get("planar_inlier_ratio", 0.0), "approaching": approaching,
+        "should_announce": should_announce, "cooldown_ms": cooldown_ms,
+    }, current
+
+
+def evaluate_assistive_guidance(
+    detections: list[Observation],
+    depth: np.ndarray | None,
+    now_ms: int,
+    last_alert_ms: dict[str, int],
+) -> dict[str, Any]:
+    """Conservative landmarks and coarse free-space hints; never calls a VLM."""
+    candidates: list[dict[str, Any]] = []
+    landmarks = [item for item in detections if item.label in ASSISTIVE_LANDMARKS and item.confidence >= 0.45]
+    toilet = next((item for item in landmarks if item.label == "toilet"), None)
+    sink = next((item for item in landmarks if item.label == "sink"), None)
+    if toilet:
+        distance_vi = f", ước lượng khoảng {toilet.depth_m:.1f} mét" if toilet.depth_m is not None else ""
+        message_vi = f"Bồn cầu ở {toilet.location}{distance_vi}."
+        message_en = f"A toilet is {EN_LOCATIONS.get(toilet.location, toilet.location)}" + (f", approximately {toilet.depth_m:.1f} meters away." if toilet.depth_m is not None else ".")
+        if sink:
+            message_vi += " Có bồn rửa trong cùng khung hình; đây có thể là khu vệ sinh."
+            message_en += " A sink is also visible; this may be a restroom area."
+        candidates.append({"rule":"toilet_landmark", "message_vi":message_vi, "message_en":message_en,
+                           "confidence":toilet.confidence, "depth_m_advisory":toilet.depth_m, "score":4})
+    elif sink:
+        distance_vi = f", ước lượng khoảng {sink.depth_m:.1f} mét" if sink.depth_m is not None else ""
+        candidates.append({"rule":"sink_landmark", "message_vi":f"Bồn rửa ở {sink.location}{distance_vi}.",
+                           "message_en":f"A sink is {EN_LOCATIONS.get(sink.location, sink.location)}.", "confidence":sink.confidence,
+                           "depth_m_advisory":sink.depth_m, "score":1})
+
+    sectors = depth_sector_summary(depth)
+    front_wall = estimate_front_wall(depth, detections)
+    center, left, right = sectors["center"], sectors["left"], sectors["right"]
+    if center is not None and center <= 1.25 and left is not None and right is not None:
+        best_name, best_value = ("left", left) if left >= right else ("right", right)
+        if best_value >= center + 0.55:
+            direction_vi = "bên trái" if best_name == "left" else "bên phải"
+            candidates.append({
+                "rule":"center_surface_side_opening", "score":3, "confidence":0.7,
+                "depth_m_advisory":center,
+                "message_vi":f"Phía trước có {'tường' if front_wall['wall_likely'] else 'bề mặt hoặc vật cản'} gần, ước lượng khoảng {center:.1f} mét. {direction_vi.capitalize()} có vẻ thoáng hơn; hãy kiểm tra bằng gậy trước khi đổi hướng.",
+                "message_en":f"A {'wall' if front_wall['wall_likely'] else 'surface or obstacle'} appears close ahead, approximately {center:.1f} meters. The {best_name} side appears more open; check with your cane before changing direction.",
+            })
+
+    candidates.sort(key=lambda row: row["score"], reverse=True)
+    primary = candidates[0] if candidates else None
+    if primary:
+        key = f"guidance:{primary['rule']}"
+        cooldown_ms = 15000 if "landmark" in primary["rule"] else 8000
+        primary.update({"id":key, "severity":"guidance", "cooldown_ms":cooldown_ms})
+        primary["should_announce"] = now_ms - last_alert_ms.get(key, -cooldown_ms) >= cooldown_ms
+        if primary["should_announce"]:
+            last_alert_ms[key] = now_ms
+    return {"primary_alert":primary, "candidates":candidates[:5], "depth_sectors_m_advisory":sectors,
+            "front_wall":front_wall,
+            "vlm_used":False, "navigation_certified":False}
+
+
 class FrameRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=80)
     image_jpeg_base64: str = Field(min_length=100)
@@ -172,6 +342,7 @@ class SessionState:
         self.depth: np.ndarray | None = None
         self.depth_frame = -1
         self.previous_geometry: dict[str, tuple[float, int]] = {}
+        self.previous_wall: tuple[float, int] | None = None
         self.last_alert_ms: dict[str, int] = {}
 
     def memory_rows(self, now_ms: int) -> list[dict[str, Any]]:
@@ -295,6 +466,21 @@ class PerceptionEngine:
             safety, state.previous_geometry = evaluate_safety(
                 current, state.previous_geometry, now_ms, state.last_alert_ms,
             )
+            guidance = evaluate_assistive_guidance(current, state.depth, now_ms, state.last_alert_ms)
+            wall_alert, state.previous_wall = evaluate_surface_safety(
+                guidance["front_wall"], state.previous_wall, now_ms, state.last_alert_ms,
+            )
+            if wall_alert is not None:
+                hazards = [*safety["active_hazards"], wall_alert]
+                hazards.sort(key=lambda row: (row["score"], row["area_ratio"], row["confidence"]), reverse=True)
+                safety["active_hazards"] = hazards[:5]
+                safety["primary_alert"] = hazards[0]
+                safety["state"] = hazards[0]["severity"]
+            # Collision alerts always win. Landmark/free-space guidance is only
+            # spoken when the immediate safety channel is clear.
+            if safety["primary_alert"] is None and guidance["primary_alert"] is not None:
+                safety["state"] = "guidance"
+                safety["primary_alert"] = guidance["primary_alert"]
             state.frames += 1
             state.last_frame_at = time.monotonic()
             elapsed_ms = (time.perf_counter() - started) * 1000
@@ -302,7 +488,7 @@ class PerceptionEngine:
             detector_fps = 1000 / max(state.inference_ms_ema, 1e-6)
             counts = Counter(item.label_vi for item in current)
             scene = ", ".join(f"{count} {label}" for label, count in counts.most_common(8)) or "chưa nhận ra vật rõ ràng"
-            watch = normalize_target(request.watch_target, {item.label for item in state.history}) if request.watch_target else None
+            watch = normalize_target(request.watch_target, {item.label for item in current}) if request.watch_target else None
             watch_status = None
             if watch:
                 visible = [item for item in current if item.label == watch]
@@ -313,7 +499,7 @@ class PerceptionEngine:
                 "frame_id": state.frames, "image_width": width, "image_height": height,
                 "detections": [asdict(item) for item in current], "scene_vi": scene,
                 "memory": state.memory_rows(now_ms), "watch": {"target": watch, "status": watch_status},
-                "safety": safety,
+                "safety": safety, "assistive_guidance": guidance,
                 "metrics": {
                     "detector": "YOLO11n + ByteTrack", "detector_fps_capacity": round(detector_fps, 2),
                     "inference_ms": round(elapsed_ms, 2), "depth_enabled": self.depth_model is not None,
@@ -349,7 +535,6 @@ class PerceptionEngine:
             else:
                 answer = "Trong phiên này tôi đã thấy: " + ", ".join(row["label_vi"] for row in rows[:12]) + "." if rows else "Visual memory chưa có dữ liệu."
             return {"answer_vi": answer, "memory": rows}
-
 
 def create_app(engine: PerceptionEngine) -> FastAPI:
     app = FastAPI(title="OmniGlass H100 Perception", version="2.0")

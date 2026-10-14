@@ -1,0 +1,441 @@
+% !TEX program = xelatex
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{Madrid}
+\usefonttheme{professionalfonts}
+
+\usepackage{fontspec}
+\setmainfont{Arial}
+\setmonofont{Consolas}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric,calc,shadows.blur}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fontawesome5}
+
+% ---------------------------------------------------------------------------
+% Bảng màu lấy trực tiếp từ giao diện web trên box (server.py) để bộ slide
+% và sản phẩm thật trông là một hệ thống nhất quán.
+% ---------------------------------------------------------------------------
+\definecolor{oeNavy}{HTML}{0B2136}
+\definecolor{oeBlue}{HTML}{1F6F91}
+\definecolor{oeSky}{HTML}{2A8FC0}
+\definecolor{oeGreen}{HTML}{1FA97A}
+\definecolor{oeRed}{HTML}{C0453F}
+\definecolor{oeLightBg}{HTML}{F3F7FA}
+\definecolor{oeGray}{HTML}{5B6B7C}
+
+\setbeamercolor{structure}{fg=oeNavy}
+\setbeamercolor{palette primary}{bg=oeNavy,fg=white}
+\setbeamercolor{palette secondary}{bg=oeBlue,fg=white}
+\setbeamercolor{palette tertiary}{bg=oeNavy,fg=white}
+\setbeamercolor{palette quaternary}{bg=oeNavy,fg=white}
+\setbeamercolor{title}{fg=white}
+\setbeamercolor{subtitle}{fg=white}
+\setbeamercolor{author}{fg=oeNavy}
+\setbeamercolor{institute}{fg=oeGray}
+\setbeamercolor{date}{fg=oeGray}
+\setbeamercolor{frametitle}{bg=oeNavy,fg=white}
+\setbeamercolor{block title}{bg=oeBlue,fg=white}
+\setbeamercolor{block body}{bg=oeLightBg,fg=oeNavy}
+\setbeamercolor{block title alerted}{bg=oeRed,fg=white}
+\setbeamercolor{block body alerted}{bg=oeLightBg,fg=oeNavy}
+\setbeamercolor{itemize item}{fg=oeGreen}
+\setbeamercolor{itemize subitem}{fg=oeSky}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamertemplate{itemize item}{\raise1pt\hbox{\textbullet}}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize\color{oeNavy},
+  breaklines=true,
+  columns=fullflexible,
+  backgroundcolor=\color{oeLightBg},
+  frame=single,
+  rulecolor=\color{oeGray},
+  framerule=0.3pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt
+}
+
+% ---------------------------------------------------------------------------
+% Hình trang trí cho title page: một "mắt kính" cách điệu — ống kính camera
+% lồng trong khung ngắm kiểu AR, gợi ý cho "thị giác biên" (edge vision).
+% ---------------------------------------------------------------------------
+\newcommand{\titleGlyph}{%
+\begin{tikzpicture}[scale=0.62]
+  \draw[oeBlue, line width=1.1pt] (0,0) circle (1.15);
+  \draw[oeNavy, line width=1.6pt] (0,0) circle (0.78);
+  \shade[ball color=oeGreen] (0,0) circle (0.36);
+  \foreach \a in {0,90,180,270}{
+    \draw[oeSky, line width=1.4pt]
+      ($(\a:1.15)+(\a:0.12)$) -- ($(\a:1.15)+(\a:0.42)$);
+  }
+  \draw[oeGray, line width=1pt] (-1.55,-1.55) -- (-1.55,-1.1) -- (-1.1,-1.55) -- cycle;
+  \draw[oeGray, line width=1pt] (-1.55,1.55) -- (-1.55,1.1);
+  \draw[oeGray, line width=1pt] (-1.55,1.55) -- (-1.1,1.55);
+  \draw[oeGray, line width=1pt] (1.55,1.55) -- (1.55,1.1);
+  \draw[oeGray, line width=1pt] (1.55,1.55) -- (1.1,1.55);
+  \draw[oeGray, line width=1pt] (1.55,-1.55) -- (1.55,-1.1);
+  \draw[oeGray, line width=1pt] (1.55,-1.55) -- (1.1,-1.55);
+\end{tikzpicture}}
+
+\title{OmniGlass Edge}
+\subtitle{\small Trợ lý đa phương thức chạy hoàn toàn \textbf{on-device} cho người khiếm thị trên nền tảng Qualcomm Snapdragon (QCS8550)}
+\author{Nhóm 2}
+\institute{\small Khoa Công nghệ Thông tin -- Trường Đại học Khoa học Tự nhiên, ĐHQG-HCM}
+\date{Tháng 8, 2026}
+\titlegraphic{\vspace{-4mm}\titleGlyph}
+
+\begin{document}
+
+% =============================================================================
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Nội dung}
+  \tableofcontents
+\end{frame}
+
+% =============================================================================
+\section{Động lực}
+
+\begin{frame}{Vì sao chọn on-device, không phải cloud?}
+  \begin{block}{Bài toán}
+    Một trợ lý cảnh báo nguy hiểm cho người khiếm thị không thể chấp nhận độ trễ
+    mạng, mất kết nối, hay để hình ảnh camera rời khỏi thiết bị.
+  \end{block}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{\faCloud\ Trợ lý VLM trên cloud}
+      \begin{itemize}
+        \item Độ trễ round-trip: hàng trăm ms tới vài giây
+        \item Cần kết nối mạng liên tục
+        \item Dữ liệu camera/mic phải rời khỏi thiết bị
+        \item Chi phí tăng theo lượng sử dụng
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{\faMicrochip\ OmniGlass Edge}
+      \begin{itemize}
+        \item Detection + depth chạy \textbf{cục bộ}, từng khung hình
+        \item Hoạt động hoàn toàn offline
+        \item Camera/mic không rời khỏi box
+        \item Lập lịch có ý thức về nhiệt độ, an toàn là ưu tiên số một
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Tổng quan hệ thống}
+
+\begin{frame}{Pipeline đầu-cuối}
+  \centering
+  \begin{tikzpicture}[
+      font=\scriptsize,
+      node distance=6mm,
+      box/.style={draw=oeBlue, fill=oeLightBg, rounded corners=2pt, text width=2.05cm,
+                  align=center, minimum height=1.05cm, thick,
+                  blur shadow={shadow blur steps=6, shadow xshift=0.4pt,
+                               shadow yshift=-1.2pt, shadow blur radius=2pt}},
+      always/.style={box, draw=oeGreen},
+      talk/.style={box, draw=oeSky},
+      arr/.style={-{Latex[length=2mm]}, thick, oeGray}
+    ]
+    % vòng lặp nhận thức luôn chạy (hàng trên) -- hiện ngay từ đầu
+    \node[always] (cam) {\faCamera\\Camera\\\texttt{/dev/video2}};
+    \node[always, right=of cam] (yolo) {\faCrosshairs\\YOLO11\\detect + depth};
+    \node[always, right=of yolo] (htp) {\faMicrochip\\Hexagon HTP\\(QNN)};
+    \node[right=of htp, text width=2.3cm, align=center, font=\scriptsize\bfseries, color=oeGreen]
+      (loopnote) {Always-on\\$\approx$23--24 FPS};
+
+    \draw[arr] (cam) -- (yolo);
+    \draw[arr] (yolo) -- (htp);
+    \draw[arr] (htp) -- (loopnote);
+
+    % vòng lặp push-to-talk (hàng dưới) -- xuất hiện dần theo từng bước
+    \node<2->[talk, below=14mm of cam] (mic) {\faMicrophone\\Push-to-talk\\microphone};
+    \node<3->[talk, right=of mic] (stt) {\faClosedCaptioning\\Whisper STT\\CPU NEON};
+    \node<4->[talk, right=of stt] (vlm) {\faRobot\\Qwen3.5 2B VL\\llama.cpp};
+    \node<5->[talk, right=of vlm] (tts) {\faWaveSquare\\VieNeu TTS\\stream PCM};
+    \node<5->[talk, right=of tts] (spk) {\faVolumeUp\\Speaker\\ALSA / PC};
+
+    \draw<3->[arr] (mic) -- (stt);
+    \draw<4->[arr] (stt) -- (vlm);
+    \draw<5->[arr] (vlm) -- (tts);
+    \draw<5->[arr] (tts) -- (spk);
+
+    % nét đứt: scene facts từ perception được nạp vào prompt của VLM
+    \draw<6->[arr, dashed] (htp.south) |- ($(vlm.north)+(0,4mm)$) -- (vlm.north);
+  \end{tikzpicture}
+
+  \vspace{6pt}
+  \onslide<6->{{\scriptsize\color{oeGray} Mũi tên nét đứt: scene facts (vật thể, khoảng cách,
+  nguy hiểm) từ detector/depth được nạp trực tiếp vào prompt của VLM ở \emph{mọi} lượt hỏi --
+  câu trả lời luôn bám theo những gì camera đang thấy \emph{ngay lúc đó}.}}
+\end{frame}
+
+\begin{frame}{Nền tảng phần cứng}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Thành phần} & \textbf{Chi tiết} \\
+    \midrule
+    \faMicrochip\ Dev board & Qualcomm QCS8550 Kalama HDK \\
+    \faLinux\ OS trên box & \texttt{kalama-qti-distro-ubuntu-fullstack-debug} \\
+    \faBolt\ NPU & Hexagon HTP, 4 vùng cảm biến nhiệt (\texttt{nspss-0..3}) \\
+    \faTv\ GPU & Adreno 740 (nhận diện qua OpenCL, chưa dùng ở bản chạy chính) \\
+    \faServer\ CPU & Kryo, tập lệnh SIMD ARM NEON \\
+    \faUsb\ Kết nối host & USB (ADB), VID \texttt{05C6} / PID \texttt{901D} \\
+    \bottomrule
+  \end{tabular}
+  \vspace{10pt}
+  \begin{alertblock}{Vì sao quan trọng}
+    NPU là tài nguyên \textbf{chia sẻ}: vòng lặp nhận thức luôn chạy và VLM theo
+    yêu cầu cùng cạnh tranh chung một cụm engine Hexagon HTP.
+  \end{alertblock}
+\end{frame}
+
+% =============================================================================
+\section{Nhận thức luôn hoạt động}
+
+\begin{frame}[fragile]{Perception không bao giờ nhường quyền}
+  \begin{itemize}
+    \item YOLO11 detector + depth đơn mắt chạy liên tục trên Hexagon HTP qua QNN.
+    \item Đo thực tế trên box: \textbf{23,4--23,7 FPS} throughput ổn định của detector.
+    \item Độ tươi của khung hình được theo dõi rõ ràng (\texttt{frame\_age\_ms}) --
+          trạng thái cũ/mới được quan sát được, không phải giả định.
+    \item \textbf{Nguyên tắc thiết kế:} perception luôn giữ độ ưu tiên cao nhất --
+          lượt VLM phải chờ nó, chứ không phải ngược lại.
+  \end{itemize}
+  \vspace{6pt}
+  \begin{block}{Telemetry đã verify (\texttt{GET /health})}
+\begin{lstlisting}
+"scene": {"frame_id": 3644, "frame_age_ms": 9.5,
+          "camera_ok": true, "depth_ok": true}
+"resources": {"detector_fps": 23.40, "npu_temperature_c": 80.8}
+\end{lstlisting}
+  \end{block}
+\end{frame}
+
+% =============================================================================
+\section{Nhận dạng giọng nói (STT)}
+
+\begin{frame}{STT: Ba hướng đã thử, một hướng lên bản chính}
+  \begin{enumerate}[<+->]
+    \item \textbf{GPU (Adreno 740, OpenCL)} -- thiết bị nhận diện đúng, nhưng
+          \emph{cả hai} kernel OpenCL Q8 và FP16 của whisper.cpp đều segfault
+          (\texttt{exit 139}). Loại bỏ: sẽ làm STT crash khi lên sản phẩm.
+    \item \textbf{NPU (Hexagon HTP, QNN)} -- hướng đúng về lâu dài; Whisper cần một
+          QNN context được export qua Qualcomm AI Hub. Box hiện chưa có token/credential
+          AI Hub $\Rightarrow$ bị chặn, chưa bị bỏ.
+    \item \textbf{Streaming thô} (\texttt{whisper-stream}, chunk 1,5\,s) -- tự sinh câu
+          tiếng Việt giả khi phòng im lặng, mỗi chunk mã hóa mất $\approx$2,7\,s.
+          Không an toàn cho thiết bị hỗ trợ người khiếm thị. Loại bỏ.
+  \end{enumerate}
+  \begin{alertblock}<4->{Cấu hình đã lên bản chính}
+    \texttt{whisper.cpp} trên CPU/NEON, \textbf{Base Q8} (nâng từ Small Q8),
+    Silero VAD (ngưỡng 0,5, tối thiểu nói 250\,ms, tối thiểu im lặng 400\,ms),
+    audio context chốt 512 frame, chỉ trả transcript \emph{cuối cùng} sau khi
+    thả nút (VAD-bounded final).
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{STT: Kết quả đo thực tế}
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Cấu hình} & \textbf{Audio} & \textbf{Thời gian xử lý} & \textbf{RTF} \\
+    \midrule
+    Small Q8 (bản cũ) & 8,75\,s & độ trễ cao hơn & -- \\
+    \textbf{Base Q8 + VAD ctx-512} & 8,75\,s & \textbf{2,48\,s} & \textbf{0,28} \\
+    \bottomrule
+  \end{tabular}
+  \vspace{10pt}
+
+  RTF~0,28 nghĩa là một đoạn ghi âm mic thật dài 8,75 giây được nhận dạng
+  chỉ trong khoảng 2,5 giây -- nhanh hơn thời gian thực rõ rệt, chỉ dùng CPU,
+  trong khi YOLO/depth vẫn chạy nguyên vẹn trên NPU.
+\end{frame}
+
+% =============================================================================
+\section{Suy luận ngôn ngữ (VLM)}
+
+\begin{frame}{VLM: Qwen3.5 2B VL}
+  \begin{itemize}
+    \item Backend: \texttt{llama\_cpp} (nhãn trên pipeline: \emph{GenieX Qwen3.5 2B VL}).
+    \item Chỉ được gọi \emph{theo yêu cầu} -- một lượt cho mỗi lần thả nút
+          push-to-talk, không bao giờ chạy trong vòng lặp always-on.
+    \item Prompt luôn được ``bám thực tế'' bằng scene facts sống từ detector/depth
+          (loại vật thể, khoảng cách, nguy hiểm), không chỉ gửi khung hình thô.
+    \item Việc được phép chạy (admission) bị chặn bởi cơ chế nhiệt NPU chia sẻ
+          (xem phần sau).
+  \end{itemize}
+\end{frame}
+
+% =============================================================================
+\section{Tổng hợp giọng nói (TTS)}
+
+\begin{frame}{TTS: VieNeu, phát streaming}
+  \begin{itemize}
+    \item Backend \texttt{vieneu}, giọng \textbf{Phạm Tuyên}, tốc độ phát
+          \textbf{1,5$\times$}.
+    \item \textbf{Streaming, không phải batch:} PCM theo từng cụm câu
+          (\texttt{phrase\_pcm}) ở 48\,kHz -- cụm âm đầu tiên bắt đầu phát trước
+          khi toàn bộ câu trả lời tổng hợp xong.
+    \item Hai đích phát độc lập: loa ALSA trên box, hoặc Web Audio API của
+          trình duyệt để theo dõi từ xa khi phát triển.
+    \item Cache kết quả quan sát trực tiếp: \texttt{cache\_hits=4,
+          cache\_misses=0} với các cụm câu lặp lại.
+  \end{itemize}
+\end{frame}
+
+% =============================================================================
+\section{Lập lịch an toàn là ưu tiên số một}
+
+\begin{frame}[fragile]{Cơ chế chặn nhiệt (Thermal Admission Guard)}
+  \begin{block}{Quy tắc}
+    Lượt VLM chỉ được \textbf{admit} khi \texttt{npu\_temperature\_c}
+    $\le 75.0^\circ$C. Perception, STT, TTS \textbf{không} bị ràng buộc này.
+  \end{block}
+  \pause
+  \vspace{6pt}
+  \textbf{Quan sát thực tế (hai lần kiểm tra độc lập, cùng một buổi):}
+  \begin{lstlisting}
+"npu_temperature_c": 79.2  -> vlm_admitted: false
+"npu_temperature_c": 80.8  -> vlm_admitted: false
+"vlm_admission_reasons": ["npu_temperature_c=80.8 above 75.0"]
+\end{lstlisting}
+  \pause
+  \vspace{6pt}
+  \textbf{Vì sao quan trọng với thiết bị hỗ trợ người khiếm thị:} một lượt VLM
+  ``nói nhiều'' không bao giờ được phép làm nghẽn hay crash vòng lặp phát hiện
+  nguy hiểm. Khi box nóng, OmniGlass Edge \emph{giảm cấp một cách an toàn} --
+  câu hỏi xếp hàng chờ, còn detection vẫn chạy liên tục.
+\end{frame}
+
+% =============================================================================
+\section{Demo trực tiếp}
+
+\begin{frame}[fragile]{Demo trực tiếp -- \url{http://localhost:8090}}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Trên màn hình}
+      \begin{itemize}
+        \item Camera MJPEG stream trực tiếp từ box
+        \item Nút \emph{giữ để nói} (hold-to-talk) cho hỏi-đáp rảnh tay
+        \item Lab \emph{chỉ test STT} độc lập (test mic, không gọi VLM/TTS)
+        \item Bảng thời gian chi tiết từng lượt (STT, VLM first-token,
+              chờ nhiệt, TTS)
+        \item Scene facts thật đã gửi vào VLM (bảng chứng minh)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \textbf{Telemetry trực tiếp (đã verify)}
+\begin{lstlisting}
+{
+ "mode": "listening",
+ "scene": {"camera_ok": true, "depth_ok": true},
+ "components": {
+   "stt": {"backend": "whisper_cli_cpu",
+           "model_name": "ggml-base-q8_0.bin"},
+   "tts": {"backend": "vieneu", "streaming": true},
+   "vlm": {"backend": "llama_cpp", "admitted": false}
+ },
+ "resources": {"detector_fps": 23.40,
+               "npu_temperature_c": 80.8}
+}
+\end{lstlisting}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Tổng hợp benchmark}
+
+\begin{frame}{Tổng hợp benchmark}
+  \centering
+  \begin{tabular}{lc}
+    \toprule
+    \textbf{Chỉ số} & \textbf{Đo thực tế} \\
+    \midrule
+    Throughput của detector & 23,4 -- 23,7 FPS \\
+    Độ tươi khung hình & $\approx$10 -- 34\,ms \\
+    Mô hình STT & Whisper Base, Q8 (trước là Small Q8) \\
+    RTF của STT (đoạn 8,75\,s) & 0,28 (2,48\,s) \\
+    VAD & Silero, ngưỡng 0,5 / 250\,ms / 400\,ms \\
+    Sample rate / tốc độ phát TTS & 48\,kHz / 1,5$\times$ \\
+    Ngưỡng nhiệt cho phép VLM & 75,0\,$^\circ$C \\
+    Nhiệt NPU quan sát trong buổi test & 79,2 -- 80,8\,$^\circ$C \\
+    Backend STT trên GPU (Adreno 740) & Chưa sẵn sàng lên bản chính (segfault) \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% =============================================================================
+\section{Nhật ký kỹ thuật}
+
+\begin{frame}{Những gì đã thay đổi trong buổi làm việc (git log)}
+  \small
+  \begin{description}
+    \item[\texttt{940e361}] feat: stream verified Vietnamese TTS to PC
+    \item[\texttt{9b19c45}] feat: increase Vietnamese TTS speed to 1.5x
+    \item[\texttt{cce8e50}] feat: show live pipeline latency on demo
+    \item[\texttt{307c48f}] feat: add Vietnamese STT test lab
+    \item[\texttt{b6385dc}] \textbf{perf: accelerate Vietnamese STT on QCS8550}
+    \item[\texttt{1935751}] rebrand: rename demo UI to OmniGlass Edge
+  \end{description}
+  \vspace{6pt}
+  Branch \texttt{agent/edge-ai-v2-assistant}, đã push lên
+  \href{https://github.com/technoob05/omniglass-vietnamese-edge-ai}{\faGithub\ \texttt{github.com/technoob05/omniglass-vietnamese-edge-ai}}.
+  Bộ test toàn bộ profile: \textbf{12/12 pass}.
+\end{frame}
+
+% =============================================================================
+\section{Hạn chế \& hướng phát triển}
+
+\begin{frame}{Hạn chế \& hướng phát triển}
+  \begin{itemize}
+    \item \textbf{Streaming ASR thật} cần một QNN context của Whisper export qua
+          Qualcomm AI Hub (công bố của hãng: encoder Whisper-Tiny $\approx$18\,ms
+          trên NPU của QCS8550) -- đang chặn ở credential AI Hub, không phải ở
+          kiến trúc.
+    \item Backend GPU (Adreno 740) OpenCL cho whisper.cpp vẫn còn segfault --
+          chưa cô lập được root cause.
+    \item Push-to-talk chỉ single-turn: chưa có barge-in / ngắt lời khi box
+          đang nói.
+    \item Chưa có đánh giá WER (word error rate) chính thức -- kết quả hiện tại
+          chỉ là độ trễ/throughput.
+    \item Hiện chỉ tiếng Việt; đa ngôn ngữ là scope creep chưa nằm trong kế
+          hoạch.
+  \end{itemize}
+\end{frame}
+
+% =============================================================================
+\section{Kết luận}
+
+\begin{frame}{Điểm chính cần nhớ}
+  \begin{itemize}
+    \item \textbf{OmniGlass Edge} chạy toàn bộ vòng lặp trợ giúp --
+          phát hiện $\to$ hiểu $\to$ nói -- hoàn toàn trên một box Qualcomm
+          QCS8550, không cần round-trip qua cloud.
+    \item Mọi con số trong bộ slide này đều được xác thực bằng một lần gọi
+          \texttt{/health} thật hoặc một lượt test pass thật, không phải từ
+          spec sheet.
+    \item An toàn được đưa vào \emph{kiến trúc}: perception luôn giữ ưu tiên,
+          VLM bị chặn theo nhiệt, và một hướng streaming STT nhanh-nhưng-sai đã
+          bị loại bỏ có chủ đích.
+  \end{itemize}
+  \vspace{10pt}
+  \centering
+  \Large\textbf{Demo: \url{http://localhost:8090}}
+\end{frame}
+
+\end{document}

@@ -79,10 +79,11 @@ const el = {
   stop: document.querySelector('#stop'), pushToTalk:document.querySelector('#pushToTalk'), voice: document.querySelector('#voice'), language:document.querySelector('#language'), workflow:document.querySelector('#workflow'),
   boxes: document.querySelector('#boxes'), perceptionStatus: document.querySelector('#perceptionStatus'),
   memory: document.querySelector('#memory'), watchTarget: document.querySelector('#watchTarget'),
-  resetMemory: document.querySelector('#resetMemory'),
+  resetMemory: document.querySelector('#resetMemory'), clearConversation:document.querySelector('#clearConversation'),
   safetyPanel: document.querySelector('#safetyPanel'), safetyIcon: document.querySelector('#safetyIcon'),
   safetyMessage: document.querySelector('#safetyMessage'), safetyMeta: document.querySelector('#safetyMeta'),
-  safetyAlerts: document.querySelector('#safetyAlerts'), detectorLatency: document.querySelector('#detectorLatency'),
+  safetyAlerts: document.querySelector('#safetyAlerts'), assistiveGuidance:document.querySelector('#assistiveGuidance'), speakDistance:document.querySelector('#speakDistance'),
+  cameraSource:document.querySelector('#cameraSource'), detectorLatency: document.querySelector('#detectorLatency'),
   detectorFps: document.querySelector('#detectorFps'), depthState: document.querySelector('#depthState'),
   memoryCount: document.querySelector('#memoryCount'),
   brandTitle:document.querySelector('#brandTitle'), workflowBadge:document.querySelector('#workflowBadge'), ttsBadge:document.querySelector('#ttsBadge'),
@@ -175,6 +176,8 @@ class VietnameseAssistant {
     this.chatSocket = null;
     this.sequence = 0;
     this.history = [];
+    this.lastAnswer = '';
+    this.lastFrameSignature = '';
     this.consumedFinalIds = new Set();
     this.ttsAbort = null;
     this.ttsSources = new Set();
@@ -310,18 +313,23 @@ class VietnameseAssistant {
 
   async start() {
     await this.stop(false);
+    this.clearConversation();
     const run = ++this.runEpoch;
     this.setState('connecting', this.isEnglish() ? 'Opening camera and microphone…' : 'Đang mở camera và micro…');
     el.start.disabled = true; el.stop.disabled = false;
     el.pushToTalk.disabled = false;
     try {
+      const selectedCamera = el.cameraSource?.value || '';
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
+        video: selectedCamera
+          ? {deviceId:{exact:selectedCamera}, width:{ideal:1280}, height:{ideal:720}}
+          : {facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
         audio: {echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1},
       });
       if (run !== this.runEpoch) return;
       el.video.srcObject = this.mediaStream;
       await el.video.play();
+      await this.refreshCameraSources(!selectedCamera);
       await this.resetPerception(false);
       void this.perceptionLoop(run);
       await Promise.all([this.connectAsr(run), this.startAudio(run)]);
@@ -331,6 +339,37 @@ class VietnameseAssistant {
       this.message('system', `Lỗi khởi động: ${error.message}`);
       el.start.disabled = false; el.stop.disabled = true;
     }
+  }
+
+  clearConversation() {
+    for(const item of el.conversation.querySelectorAll('.message:not(#introMessage)')) item.remove();
+    this.history=[]; this.lastAnswer=''; this.consumedFinalIds.clear(); el.conversation.scrollTop=0;
+  }
+
+  async refreshCameraSources(autoPreferExternal = false) {
+    if (!navigator.mediaDevices?.enumerateDevices || !el.cameraSource) return;
+    const currentId = this.mediaStream?.getVideoTracks()[0]?.getSettings()?.deviceId || el.cameraSource.value;
+    const cameras = (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === 'videoinput');
+    const external = cameras.find(item => /usb|external|capture|webcam|camera/i.test(item.label) && !/integrated|built.?in|facetime/i.test(item.label));
+    el.cameraSource.replaceChildren();
+    for (const [index, camera] of cameras.entries()) {
+      const option=document.createElement('option'); option.value=camera.deviceId;
+      option.textContent=camera.label || `Camera ${index+1}`; el.cameraSource.appendChild(option);
+    }
+    el.cameraSource.value = (autoPreferExternal && external?.deviceId)
+      ? external.deviceId
+      : cameras.some(item => item.deviceId === currentId) ? currentId : external?.deviceId || cameras[0]?.deviceId || '';
+    if(autoPreferExternal && external?.deviceId && external.deviceId!==currentId) await this.switchCamera();
+  }
+
+  async switchCamera() {
+    if (!this.mediaStream || this.state === 'stopped') return;
+    const deviceId=el.cameraSource.value; if (!deviceId) return;
+    const replacement=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:deviceId},width:{ideal:1280},height:{ideal:720}},audio:false});
+    for(const track of this.mediaStream.getVideoTracks()){this.mediaStream.removeTrack(track);track.stop();}
+    this.mediaStream.addTrack(replacement.getVideoTracks()[0]); el.video.srcObject=this.mediaStream; await el.video.play();
+    this.history=[]; this.lastAnswer=''; this.lastFrameSignature=''; await this.resetPerception(true);
+    el.caption.textContent=this.isEnglish()?'Camera switched. Fresh visual context is ready.':'Đã chuyển camera. Ngữ cảnh hình ảnh cũ đã được xóa.';
   }
 
   async stop(increment = true) {
@@ -547,8 +586,10 @@ class VietnameseAssistant {
         );
       if (routedAnswer && earlySpeech) this.queueEarlySpeech(earlySpeech, routedAnswer, true);
       if (run !== this.runEpoch || turn !== this.turnEpoch) return;
-      this.history.push({role:'user', content:transcript}, {role:'assistant', content:answer});
-      this.history = this.history.slice(-MAX_HISTORY_MESSAGES);
+      // Never feed old visual answers back into the next visual turn. Doing so
+      // anchors the model to a previous scene and looks like a stale cache.
+      this.history = [];
+      this.lastAnswer = answer;
       this.message('assistant', answer);
       if (earlySpeech) {
         await this.finishEarlySpeech(earlySpeech);
@@ -726,12 +767,14 @@ class VietnameseAssistant {
   }
 
   renderSafety(safety) {
-    const state = ['danger','warning','caution'].includes(safety.state) ? safety.state : 'clear';
+    const state = ['danger','warning','caution','guidance'].includes(safety.state) ? safety.state : 'clear';
     el.safetyPanel.className = `safety-panel ${state}`;
     const alert = safety.primary_alert;
-    el.safetyIcon.textContent = state === 'danger' ? '!' : state === 'warning' ? '△' : state === 'caution' ? '•' : '✓';
+    el.safetyIcon.textContent = state === 'danger' ? '!' : state === 'warning' ? '△' : state === 'caution' ? '•' : state === 'guidance' ? '→' : '✓';
+    const removeDistance = text => String(text || '').replace(/\s*(?:Ước lượng khoảng|Estimated distance:)\s*[0-9]+(?:[.,][0-9]+)?\s*(?:mét|meters?)\.?/giu,'').trim();
+    const alertText = alert ? (el.language?.value === 'en' ? (alert.message_en || alert.message_vi) : alert.message_vi) : '';
     el.safetyMessage.textContent = alert
-      ? (el.language?.value === 'en' ? (alert.message_en || alert.message_vi) : alert.message_vi)
+      ? (el.speakDistance?.checked ? alertText : removeDistance(alertText))
       : (el.language?.value === 'en' ? 'No nearby obstacle detected in the visible area.' : 'Không có vật cản gần trong vùng quan sát.');
     el.safetyMeta.textContent = alert
       ? (this.isEnglish() ? `Rule ${alert.rule || 'watch'} · ${Math.round(Number(alert.confidence||0)*100)}% · advisory depth · no VLM call` : `Rule ${alert.rule || 'watch'} · ${Math.round(Number(alert.confidence||0)*100)}% · depth chỉ tham khảo · VLM không được gọi`)
@@ -740,12 +783,15 @@ class VietnameseAssistant {
 
   enqueueSafetyAlert(alert) {
     if (!alert?.should_announce || !el.safetyAlerts?.checked || !this.audioContext) return;
+    if (alert.severity === 'guidance' && !el.assistiveGuidance?.checked) return;
     if (this.conversationOwnsAudio) { this.pendingSafetyAlert = alert; return; }
     const epoch = this.safetyEpoch;
     this.safetyQueue = this.safetyQueue
       .then(() => {
         if (epoch !== this.safetyEpoch || this.conversationOwnsAudio) return;
-        return this.playSafetyAlert(el.language?.value === 'en' ? (alert.message_en || alert.message_vi) : alert.message_vi);
+        let text=el.language?.value === 'en' ? (alert.message_en || alert.message_vi) : alert.message_vi;
+        if(!el.speakDistance?.checked) text=String(text||'').replace(/\s*(?:Ước lượng khoảng|Estimated distance:)\s*[0-9]+(?:[.,][0-9]+)?\s*(?:mét|meters?)\.?/giu,'').trim();
+        return this.playSafetyAlert(text);
       })
       .catch(error => { if (error.name !== 'AbortError') console.warn('Safety TTS:', error); });
   }
@@ -860,7 +906,7 @@ class VietnameseAssistant {
   }
 
   renderMemory(rows) {
-    if (!rows.length) { el.memory.innerHTML = `<div class="memory-item">${this.isEnglish() ? 'No observations yet.' : 'Chưa có observation.'}</div>`; return; }
+    if (!rows.length) { el.memory.innerHTML = `<div class="memory-item">${this.isEnglish() ? 'Historical object memory is disabled for realtime mode.' : 'Đã tắt lịch sử vật thể để ưu tiên realtime.'}</div>`; return; }
     el.memory.replaceChildren(...rows.slice(0,16).map(row => {
       const item = document.createElement('div'); item.className = 'memory-item';
       const age = Number(row.last_seen_ms_ago||0)/1000;
@@ -883,7 +929,8 @@ class VietnameseAssistant {
       location:this.isEnglish() ? englishLocation(item.location) : item.location, confidence:item.confidence,
     }));
     const safety = data.safety ? {state:data.safety.state, hazards:(data.safety.active_hazards||[]).slice(0,5)} : null;
-    return `Structured perception context for the current scene (detector can be wrong): ${JSON.stringify({detections,memory,watch:data.watch,safety,depth_calibrated:false,multi_frame_order:'oldest_to_newest; final image is current'})}`;
+    const guidance=data.assistive_guidance?{depth_sectors_m_advisory:data.assistive_guidance.depth_sectors_m_advisory,front_wall:data.assistive_guidance.front_wall,candidates:(data.assistive_guidance.candidates||[]).slice(0,3),navigation_certified:false}:null;
+    return `Structured perception context for the current scene (detector and monocular depth can be wrong): ${JSON.stringify({detections,memory,watch:data.watch,safety,guidance,depth_calibrated:false,multi_frame_order:'fresh_single_frame; final image is current'})}`;
   }
 
   async askVlm(transcript, run, turn, onDelta = null) {
@@ -929,13 +976,15 @@ class VietnameseAssistant {
           if (type === 'session.queue_done' || type === 'queue_done') sendInit();
           else if (type === 'session.created') {
             // Freshness invariant: capture only after a worker session exists.
-            const frame = this.captureFrame();
-            const priorFrames = this.visualFrames.slice(-3).map(item => ({type:'image',data:item.image}));
+            // Fast interactive path: one fresh, bounded frame. Temporal object
+            // evidence still comes from YOLO/ByteTrack/depth memory in the
+            // structured perception message, without repeated VLM vision prefill.
+            const frame = this.captureFrame(512, 0.78);
+            const signature = `${frame.length}:${frame.slice(0,48)}:${frame.slice(-48)}`;
             const messages = [
               {role:'system', content:this.systemPrompt(transcript)},
               {role:'system', content:this.perceptionContext()},
-              ...this.history.slice(-MAX_HISTORY_MESSAGES),
-              {role:'user', content:[...priorFrames,{type:'image', data:frame}, {type:'text', text:transcript}]},
+              {role:'user', content:[{type:'image', data:frame}, {type:'text', text:transcript}]},
             ];
             socket.send(JSON.stringify({type:'input.append', input:{
               input_id:`${turn}-${crypto.randomUUID()}`, messages, streaming:true,
@@ -944,6 +993,7 @@ class VietnameseAssistant {
               omni_mode:false, enable_thinking:false,
             }}));
             inputSent = true;
+            this.lastFrameSignature = signature;
             this.setState('thinking', this.isEnglish() ? 'Fresh frame captured. OpenGlass is answering…' : 'Đã chụp frame mới, model đang trả lời…');
           } else if (type === 'response.output.delta' && kind === 'text') {
             const delta = data.text || '';
@@ -1112,6 +1162,15 @@ el.pushToTalk.addEventListener('keyup', event => {
   if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); assistant.endPushToTalk(); }
 });
 el.resetMemory.addEventListener('click', () => void assistant.resetPerception(true));
+el.clearConversation.addEventListener('click', () => assistant.clearConversation());
+el.cameraSource.addEventListener('change', () => void assistant.switchCamera());
+el.safetyAlerts.addEventListener('change', () => {
+  if(!el.safetyAlerts.checked){assistant.pendingSafetyAlert=null;assistant.safetyEpoch+=1;if(assistant.safetyAbort)assistant.safetyAbort.abort();}
+});
+el.assistiveGuidance.addEventListener('change', () => {
+  if(!el.assistiveGuidance.checked && assistant.pendingSafetyAlert?.severity === 'guidance') assistant.pendingSafetyAlert=null;
+});
+el.speakDistance.addEventListener('change', () => assistant.renderSafety(assistant.perception?.safety || {state:'clear'}));
 el.language.addEventListener('change', () => void assistant.switchLanguage());
 el.workflow.addEventListener('change', () => void assistant.switchWorkflow());
 for (const button of document.querySelectorAll('.sample')) button.addEventListener('click', () => {
