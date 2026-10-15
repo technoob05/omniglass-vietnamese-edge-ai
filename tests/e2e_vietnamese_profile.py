@@ -93,6 +93,7 @@ def main() -> None:
     asr_finals: list[dict[str, Any]] = []
     chat_inputs: list[dict[str, Any]] = []
     tts_statuses: list[int] = []
+    perception_statuses: list[int] = []
     console_errors: list[dict[str, Any]] = []
     page_errors: list[str] = []
     request_failures: list[str] = []
@@ -195,6 +196,12 @@ def main() -> None:
                 else None,
             )
             page.on(
+                "response",
+                lambda response: perception_statuses.append(response.status)
+                if "/api/perception/vi/frame" in response.url
+                else None,
+            )
+            page.on(
                 "console",
                 lambda message: console_errors.append(
                     {"text": message.text, "location": message.location}
@@ -261,6 +268,11 @@ def main() -> None:
                 # exact segment ordering/deduplication is covered by e2e_vi_early_tts.py.
                 "streaming_tts_covers_three_turns": len(tts_statuses) >= 3
                 and all(status == 200 for status in tts_statuses),
+                "continuous_perception_frames": len(perception_statuses) >= 10
+                and all(status == 200 for status in perception_statuses),
+                "perception_context_in_every_vlm_turn": [
+                    item["history_message_count"] for item in chat_inputs
+                ] == [3, 5, 7],
                 "returned_to_listening": "Đang nghe" in status_before_stop,
                 "animated_camera_live": video_before["width"] == 640
                 and video_before["height"] == 480
@@ -281,6 +293,7 @@ def main() -> None:
                 "user_texts": user_texts,
                 "assistant_texts": assistant_texts,
                 "tts_statuses": tts_statuses,
+                "perception_statuses": perception_statuses,
                 "video_before": video_before,
                 "video_after": video_after,
                 "status_before_stop": status_before_stop,

@@ -6,16 +6,30 @@ Keep MiniCPM-o 4.5 as the visual reasoner and conversation model, but do not
 fine-tune or depend on its unsupported Vietnamese speech output. The production
 candidate is a modular two-H100 pipeline:
 
-1. Browser/glasses microphone -> VAD/endpointer -> PhoWhisper-medium.
-2. Immutable Vietnamese transcript + a frame captured after the worker is
-   ready -> MiniCPM-o native gateway `mode=chat`.
-3. Streaming Vietnamese text -> VieNeu-TTS v3 Turbo -> browser PCM playback.
-4. MMS-TTS remains a small, fast fallback if VieNeu or its GPU is unavailable.
+1. Browser/glasses microphone -> VAD/endpointer -> PhoWhisper-large.
+2. Browser frames at 650 ms cadence -> YOLO11n/ByteTrack -> bounded visual
+   memory; uncalibrated monocular depth runs every fifth accepted frame.
+3. A deterministic safety rule engine evaluates center-corridor geometry,
+   advisory depth and per-track approach before any VLM call. It emits bounded,
+   cooldown-controlled obstacle alerts directly to 1.5x TTS.
+4. Immutable Vietnamese transcript + a fresh frame captured after the worker
+   is ready + compact detector/memory context -> MiniCPM-o native gateway `mode=chat`.
+5. Streaming Vietnamese text -> VieNeu-TTS v3 Turbo -> browser PCM playback at 1.5x.
+6. MMS-TTS remains a small, fast fallback if VieNeu or its GPU is unavailable.
 
 The original MiniCPM-o full-duplex English/Chinese path stays available as the
 control baseline. A Vietnamese preset must set `generate_audio=false`; the
 backend patch makes that setting effective without disabling native audio for
 other sessions.
+
+The dedicated assistant UI is bilingual. Vietnamese uses PhoWhisper-large and
+VieNeu; English uses a resident Whisper-large-v3-turbo ASR plus the browser's
+English system voice. Switching language reconnects only ASR and preserves the
+camera, tracker, perception session, visual memory and rolling conversation.
+Scene, distance, traffic, crossing and memory questions are VLM-first. Only
+administrative commands such as reset/track/stop bypass the VLM. During every
+question, conversation audio owns the speaker: an active rule alert is stopped
+immediately and further rule speech is deferred until VLM TTS finishes.
 
 ## Why this path
 
@@ -39,13 +53,17 @@ All numbers below are measurements from this workspace, not vendor claims.
 | MiniCPM-o chat | H100 MIG 4g.40GB, five turns | 5/5 complete; frame age P95 3.1 ms; TTFT P95 496.7 ms; done P95 1703.5 ms |
 | Native Vietnamese browser | animated 640x480 fake webcam + real-time fake mic, five turns | 5/5 text/listen and VieNeu stream start/end; native audio 0; mic suppressed during playback; returned to Live |
 | Dedicated `/vi` pipeline | PhoWhisper -> fresh JPEG -> MiniCPM chat -> VieNeu, three turns | 3 unique immutable finals; 3 exactly-once inputs and distinct frame hashes; 3 answers/TTS 200; returned to Listening; Stop final |
+| Integrated `/vi` perception | YOLO11n/ByteTrack each 650 ms; depth every fifth frame; compact memory context into MiniCPM-o | 50 perception frames during the latest 3-turn browser E2E; all frame requests 200; message counts 3/5/7 prove one perception context per turn; warm YOLO 7–14 ms and warm depth frame 47.1 ms |
+| Safety rule acceptance | forced center-path danger in browser; complete-WAV priority alert | one 1.5x alert, zero VLM inputs; real `bus.jpg` triggered `danger` with `vlm_used=false` |
+| Rule-to-VLM priority | rule audio active, then Vietnamese distance question | rule source stopped; zero rule-query calls; one VLM input with four ordered images |
+| Bilingual warm switch | live Vietnamese session switched to English | English ASR socket ready; same perception session retained; English VLM answer used four images |
 | Dedicated `/vi` protocol soak | exact H100 services, 10 sequential turns | 10/10; no duplicate/error; frame age P95 15.3 ms; ASR final P95 496.1 ms; VLM TTFT P95 536.7 ms; post-speech first audio P95 4.20 s |
 | Production early-TTS soak | exact deployed `/vi` flow, 10 sequential turns | 10/10; no duplicate/error; speech end to first decodable audio P50/P95 2.25/3.11 s, 26% lower P95 than the 4.20 s baseline |
 | MMS-TTS | H100, 15 warm calls | first playable WAV median 72.8 ms, P95 118.3 ms; RTF 0.022 |
 | VieNeu v3 | H100 PyTorch, 15 warm calls | first chunk median 127.5 ms, P95 162.6 ms; RTF 0.385 |
 | VieNeu v3 | CPU ONNX INT8, 8 threads | first chunk median 905.6 ms; RTF 3.27; no-go for live |
 | PhoWhisper-medium | H100 MIG 2g.20GB, FP16; FLEURS `vi_vn/test`, 50 utterances | normalized WER 8.97%, CER 6.06%; inference P95 979 ms; RTF 0.053; peak 1.60 GiB |
-| PhoWhisper-large | same 50 utterances, FP16 | WER 8.62%, CER 5.31%; P95 1147 ms; RTF 0.069; model VRAM +1.68 GiB vs medium |
+| PhoWhisper-large | same 50 utterances, FP16; remeasured on production H100 MIG 4g.40GB | WER 8.62%, CER 5.31%; P95 989 ms; RTF 0.054; enough VRAM remained for the resident stack |
 
 The native browser soak used an animated synthetic camera and therefore verifies
 transport/state/audio lifecycle, frame freshness and echo suppression, not visual
@@ -53,11 +71,21 @@ accuracy. The external-ASR chat soak used a real saved image and verified rollin
 context. FLEURS contains read speech and no regional-accent labels, so its result
 does not replace a consented glasses-microphone evaluation.
 
-Large removes only five additional word errors out of 1,416 while raising
-median latency by 30.8%, P95 by 17.1% and model memory by about 1.68 GiB. Both
-miss the provisional 8% WER gate, so medium remains the realtime default; the
-next quality work is endpoint/normalization and a representative microphone
-command set, not paying the large-model cost.
+Large removes eight additional word errors out of 1,416 and lowers CER from
+6.06% to 5.31%. A production-H100 rerun measured nearly identical throughput
+and P95 to medium, while preserving enough VRAM for the resident VLM,
+perception and TTS stack. Large is therefore the default quality profile. The
+browser also disables raw-energy acoustic barge-in by default because speaker
+echo can otherwise be mistaken for a new utterance; `?barge_in=1` is an
+explicit experimental opt-in.
+
+Qwen3-ASR-0.6B was also measured on the exact same frozen 50-row FLEURS
+manifest: WER 9.18%, CER 4.78%, P95 997 ms and RTF 0.054. It supports native
+streaming and remains the leading replacement candidate, but it did not beat
+PhoWhisper-large on WER and has not passed the regional-accent/noise/glasses-
+microphone set. Qwen3-ASR-1.7B is not promoted until it passes that same
+production contract. Therefore PhoWhisper-large remains the measured default
+rather than being described as universally “best”.
 
 The 10-turn baseline soak meets the current ASR, frame-freshness and VLM-TTFT
 gates but does not meet the provisional two-second end-of-speech-to-first-audio

@@ -45,9 +45,54 @@ class SpeakRequest(BaseModel):
     style: str = Field(default="tu_nhien", min_length=1, max_length=64)
 
 
+_VI_DIGITS = ("không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín")
+
+
+def vietnamese_integer(value: int) -> str:
+    """Spell the small non-negative numbers used by advisory depth."""
+    if value < 0 or value > 9999:
+        return str(value)
+    if value < 10:
+        return _VI_DIGITS[value]
+    if value < 100:
+        tens, unit = divmod(value, 10)
+        if tens == 1:
+            return "mười" if unit == 0 else f"mười {'lăm' if unit == 5 else _VI_DIGITS[unit]}"
+        suffix = "" if unit == 0 else " " + ("mốt" if unit == 1 else "tư" if unit == 4 else "lăm" if unit == 5 else _VI_DIGITS[unit])
+        return f"{_VI_DIGITS[tens]} mươi{suffix}"
+    if value < 1000:
+        hundreds, rest = divmod(value, 100)
+        if rest == 0:
+            return f"{_VI_DIGITS[hundreds]} trăm"
+        bridge = " lẻ " if rest < 10 else " "
+        return f"{_VI_DIGITS[hundreds]} trăm{bridge}{vietnamese_integer(rest)}"
+    thousands, rest = divmod(value, 1000)
+    return f"{vietnamese_integer(thousands)} nghìn" + (f" {vietnamese_integer(rest)}" if rest else "")
+
+
+def normalize_distance_for_speech(text: str) -> str:
+    """Expand numeric metre expressions so Vietnamese TTS never drops the unit."""
+    pattern = re.compile(r"(?<![\w])([0-9]+(?:[.,][0-9]+)?)\s*(?:mét|meters?|m)(?![\w])", re.IGNORECASE)
+
+    def replace(match: re.Match[str]) -> str:
+        raw = match.group(1).replace(",", ".")
+        value = float(raw)
+        if 0 < value < 1:
+            centimetres = max(1, round(value * 100))
+            return f"{vietnamese_integer(centimetres)} xăng ti mét"
+        whole = int(value)
+        fraction = raw.partition(".")[2].rstrip("0")
+        if not fraction:
+            return f"{vietnamese_integer(whole)} mét"
+        decimal = " ".join(_VI_DIGITS[int(digit)] for digit in fraction)
+        return f"{vietnamese_integer(whole)} phẩy {decimal} mét"
+
+    return pattern.sub(replace, text)
+
+
 def clean_vietnamese(text: str) -> str:
     """Keep readable Unicode while removing markup and control characters."""
-    text = unicodedata.normalize("NFC", text)
+    text = normalize_distance_for_speech(unicodedata.normalize("NFC", text))
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"[*_`#|]", " ", text)
     text = "".join(" " if unicodedata.category(char).startswith("C") else char for char in text)

@@ -8,7 +8,13 @@ import wave
 import numpy as np
 from fastapi.testclient import TestClient
 
-from scripts.native_vieneu_tts_service import STREAM_SCHEMA, create_app
+from scripts.native_vieneu_tts_service import STREAM_SCHEMA, clean_vietnamese, create_app
+
+
+def test_numeric_distances_are_spoken_explicitly() -> None:
+    assert clean_vietnamese("Người cách khoảng 0,7 m.") == "Người cách khoảng bảy mươi xăng ti mét."
+    assert clean_vietnamese("Ghế cách 1,6 mét.") == "Ghế cách một phẩy sáu mét."
+    assert clean_vietnamese("Cửa cách 2 m.") == "Cửa cách hai mét."
 
 
 class FakeVieNeu:

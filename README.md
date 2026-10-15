@@ -1,5 +1,7 @@
 # OmniGlass
 
+> **Main demo:** [OpenGlass 9B — MiniCPM-o 4.5](OPENGLASS_9B.md). Start there for the glasses demo.
+
 Local-first visual assistance prototype with one shared perception pass and one continual
 memory serving four skills: **See, Remember, Find, and Watch**.
 
@@ -19,7 +21,7 @@ and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) to fetch dependencies fro
 | Watch | Same-track missing/screen-region event detector | Working, 2D only |
 | Promptable mask tracking | Official Meta EdgeTAM checkpoint | Working as an H100 sample |
 | Native MiniCPM-o 4.5 Omni | Official browser gateway on H100 | Working; English/Chinese baseline preserved |
-| Vietnamese realtime profile | PhoWhisper VAD/ASR + MiniCPM-o vision/chat + VieNeu streaming TTS | Deployed at `/vi`; 3-turn browser E2E, 10-turn protocol soak, and resilience tests passed |
+| Vietnamese realtime profile | PhoWhisper + continuous YOLO/ByteTrack + advisory depth + bounded last-seen memory + MiniCPM-o 9B + VieNeu | Deployed at `/vi`; integrated 3-turn browser E2E passed |
 | OpenGlass ESP32 sensor bridge | External research reference | Device adapter not integrated; upstream issues listed below |
 | Metric 3D memory | Planned SLAM3R point-map bridge | Not yet metric-calibrated |
 | Qualcomm EdgeTAM | Official AI Hub model export path | Requires AI Hub token and physical board validation |
@@ -52,12 +54,45 @@ The upstream English/Chinese Omni page remains at `/omni`.
 Sentence-level early TTS is enabled by default. Append `?early_tts=0` for an
 instant full-answer-TTS rollback when comparing behavior.
 
+The H100 `/vi` profile is safety-first: YOLO/depth/ByteTrack feeds a deterministic
+center-corridor and approach rule engine on every perception result. Nearby
+hazards are announced at 1.5x with server-side cooldowns and do not invoke the
+9B VLM. MiniCPM-o is reserved for user questions or context that rules cannot
+answer. Monocular depth remains advisory; this prototype is not a certified
+navigation aid.
+
+VLM is the primary interactive path. Questions about the surroundings,
+estimated distance, traffic, street crossings, and remembered objects send up
+to three recent frames plus a fresh current frame to MiniCPM-o together with
+YOLO/depth/memory context. Rule alerts remain a low-latency background feature;
+they are interrupted as soon as the user speaks and stay muted until the VLM
+answer finishes. The language selector switches between Vietnamese
+(PhoWhisper-large + VieNeu) and English (Whisper-large-v3-turbo + system voice)
+without resetting camera or visual memory. Street-crossing responses describe
+observed traffic but never certify that it is safe to cross.
+
+The `/vi` page now sends a downscaled camera frame to a separate H100
+perception service every 650 ms. YOLO11n/ByteTrack updates boxes and bounded
+last-seen memory continuously; Depth Anything runs every fifth accepted frame.
+Each 9B turn receives a fresh full frame plus a compact detector/memory system
+message (at most 10 current detections and 12 memory rows). Detector context is
+advisory and monocular depth is explicitly uncalibrated. Neither may assert a
+safe walking route.
+
 ## Architecture
 
 ```text
 phone rear camera / uploaded video
                 |
+                +---- 650 ms ----> YOLO11n + ByteTrack ----> bounded last-seen memory
+                |                              |
+                |                         depth every 5th frame
+                v                              |
+      fresh full frame at speech final <-------+
+                |
                 v
+         MiniCPM-o 9B + detector/memory context
+
      shared detector + tracker       EdgeTAM when a user prompts an object
                 |                                  |
                 +------------------+---------------+

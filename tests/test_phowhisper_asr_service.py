@@ -28,7 +28,7 @@ class FakeWebSocket:
 
 
 class FakeEngine:
-    async def transcribe(self, audio: np.ndarray) -> dict:
+    async def transcribe(self, audio: np.ndarray, language: str = "vi") -> dict:
         duration_ms = len(audio) * 1000 / service.SAMPLE_RATE
         return {"text": "xin chào", "duration_ms": duration_ms, "inference_ms": 12.5, "rtf": 0.01}
 

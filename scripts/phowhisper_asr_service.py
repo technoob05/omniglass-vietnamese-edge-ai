@@ -32,8 +32,10 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
 
 LOGGER = logging.getLogger("omniglass.phowhisper_asr")
-MODEL_ID = "vinai/PhoWhisper-medium"
-MODEL_REVISION = "55a7e3eb6c906de891f8f06a107754427dd3be79"
+MODEL_ID = "vinai/PhoWhisper-large"
+MODEL_REVISION = "b9136a44b5f2ca664bd0b8f74baecf1715f6eeeb"
+ENGLISH_MODEL_ID = "openai/whisper-large-v3-turbo"
+ENGLISH_MODEL_REVISION = "41f01f3fe87f28c78e2fbf8b568835947dd65ed9"
 SAMPLE_RATE = 16_000
 PCM_WIDTH_BYTES = 2
 SILERO_WINDOW_SAMPLES = 512
@@ -111,7 +113,7 @@ class PhoWhisperEngine:
         self.load_seconds = time.perf_counter() - started
         self._decode_lock = threading.Lock()
 
-    def _transcribe_sync(self, audio: np.ndarray) -> dict[str, Any]:
+    def _transcribe_sync(self, audio: np.ndarray, language: str = "vi") -> dict[str, Any]:
         duration = len(audio) / SAMPLE_RATE
         if not 0 < duration <= MAX_HTTP_SECONDS:
             raise ValueError(f"Audio duration must be within (0, {MAX_HTTP_SECONDS}] seconds")
@@ -130,7 +132,7 @@ class PhoWhisperEngine:
                 generated_ids = self.model.generate(
                     input_features,
                     attention_mask=attention_mask,
-                    language="vi",
+                    language=language,
                     task="transcribe",
                     max_new_tokens=224,
                 )
@@ -144,8 +146,8 @@ class PhoWhisperEngine:
             "rtf": round(elapsed / duration, 4),
         }
 
-    async def transcribe(self, audio: np.ndarray) -> dict[str, Any]:
-        return await asyncio.to_thread(self._transcribe_sync, audio)
+    async def transcribe(self, audio: np.ndarray, language: str = "vi") -> dict[str, Any]:
+        return await asyncio.to_thread(self._transcribe_sync, audio, language)
 
 
 @dataclass
@@ -166,6 +168,7 @@ class StreamSession:
         speech_pad_ms: int,
         partial_interval_ms: int,
         max_utterance_ms: int,
+        language: str = "vi",
     ) -> None:
         self.engine = engine
         self.vad = create_silero_vad_iterator(
@@ -178,6 +181,7 @@ class StreamSession:
         self.speech_pad_ms = speech_pad_ms
         self.partial_interval_samples = int(partial_interval_ms * SAMPLE_RATE / 1000)
         self.max_utterance_samples = int(max_utterance_ms * SAMPLE_RATE / 1000)
+        self.language = language
         self.raw = bytearray()
         self.raw_base_sample = 0
         self.received_samples = 0
@@ -233,7 +237,7 @@ class StreamSession:
         audio = self._audio_slice(self.speech_start_sample, end_sample)
         if len(audio) < int(0.8 * SAMPLE_RATE):
             return
-        result = await self.engine.transcribe(audio)
+        result = await self.engine.transcribe(audio, self.language)
         self.partial_revision += 1
         await websocket.send_json({
             "type": "asr.partial",
@@ -259,7 +263,7 @@ class StreamSession:
         detected_sample = self.processed_samples
         detected_at_ms = now_ms()
         inference_started_ms = now_ms()
-        result = await self.engine.transcribe(audio)
+        result = await self.engine.transcribe(audio, self.language)
         inference_completed_ms = now_ms()
         final_id = str(uuid.uuid4())
         event = {
@@ -377,8 +381,14 @@ class StreamSession:
             await websocket.send_json({"type": "asr.no_speech", "reason": "client_flush"})
 
 
-def create_app(model_dir: str) -> FastAPI:
+def create_app(
+    model_dir: str,
+    model_id: str = MODEL_ID,
+    model_revision: str = MODEL_REVISION,
+    english_model_dir: str | None = None,
+) -> FastAPI:
     engine = PhoWhisperEngine(model_dir)
+    english_engine = PhoWhisperEngine(english_model_dir) if english_model_dir else engine
     app = FastAPI(title="OmniGlass PhoWhisper ASR", version="1.0.0")
 
     @app.get("/health")
@@ -386,8 +396,8 @@ def create_app(model_dir: str) -> FastAPI:
         free_bytes, total_bytes = torch.cuda.mem_get_info()
         return {
             "ok": True,
-            "model": MODEL_ID,
-            "revision": MODEL_REVISION,
+            "model": model_id,
+            "revision": model_revision,
             "model_dir": model_dir,
             "load_seconds": round(engine.load_seconds, 3),
             "gpu": torch.cuda.get_device_name(),
@@ -397,6 +407,7 @@ def create_app(model_dir: str) -> FastAPI:
             "vad_version": "6.2.1",
             "streaming_semantics": "VAD-endpointed utterance ASR; not a stateful streaming decoder",
             "routing_contract": "Only immutable asr.final events may be sent to the VLM",
+            "languages": {"vi": model_id, "en": ENGLISH_MODEL_ID if english_model_dir else model_id},
         }
 
     @app.post("/transcribe")
@@ -404,6 +415,7 @@ def create_app(model_dir: str) -> FastAPI:
         request: Request,
         sample_rate: int = Query(SAMPLE_RATE),
         channels: int = Query(1),
+        language: str = Query("vi", pattern="^(vi|en)$"),
     ) -> dict[str, Any]:
         content_type = request.headers.get("content-type", "application/octet-stream")
         if content_type.lower().startswith("multipart/form-data"):
@@ -418,7 +430,7 @@ def create_app(model_dir: str) -> FastAPI:
             media_type = content_type
         try:
             audio = decode_audio_payload(data, media_type, sample_rate, channels)
-            result = await engine.transcribe(audio)
+            result = await (english_engine if language == "en" else engine).transcribe(audio, language)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         final_id = str(uuid.uuid4())
@@ -442,18 +454,22 @@ def create_app(model_dir: str) -> FastAPI:
             speech_pad_ms = min(500, max(0, int(websocket.query_params.get("speech_pad_ms", "150"))))
             partial_interval_ms = min(5000, max(800, int(websocket.query_params.get("partial_interval_ms", "2000"))))
             max_utterance_ms = min(60000, max(3000, int(websocket.query_params.get("max_utterance_ms", "20000"))))
+            language = websocket.query_params.get("language", "vi").casefold()
+            if language not in {"vi", "en"}:
+                raise ValueError("language must be vi or en")
         except ValueError:
             await websocket.send_json({"type": "asr.error", "code": "invalid_query_parameters"})
             await websocket.close(code=1008)
             return
 
         session = StreamSession(
-            engine,
+            english_engine if language == "en" else engine,
             vad_threshold=vad_threshold,
             min_silence_ms=min_silence_ms,
             speech_pad_ms=speech_pad_ms,
             partial_interval_ms=partial_interval_ms,
             max_utterance_ms=max_utterance_ms,
+            language=language,
         )
         await websocket.send_json({
             "type": "asr.ready",
@@ -526,12 +542,26 @@ def main() -> None:
         "--model-dir",
         default=os.environ.get(
             "PHOWHISPER_MODEL_DIR",
-            f"models/PhoWhisper-medium-{MODEL_REVISION}",
+            f"models/PhoWhisper-large-{MODEL_REVISION}",
         ),
+    )
+    parser.add_argument("--model-id", default=os.environ.get("PHOWHISPER_MODEL_ID", MODEL_ID))
+    parser.add_argument(
+        "--model-revision",
+        default=os.environ.get("PHOWHISPER_MODEL_REVISION", MODEL_REVISION),
+    )
+    parser.add_argument(
+        "--english-model-dir",
+        default=os.environ.get("WHISPER_ENGLISH_MODEL_DIR"),
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    uvicorn.run(create_app(args.model_dir), host=args.host, port=args.port, log_level="info")
+    uvicorn.run(
+        create_app(args.model_dir, args.model_id, args.model_revision, args.english_model_dir),
+        host=args.host,
+        port=args.port,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":
